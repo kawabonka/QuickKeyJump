@@ -1,36 +1,22 @@
 import Cocoa
 
-// MARK: - 窗口操作类型
-
 enum WindowAction: String, CaseIterable {
     case leftHalf, rightHalf, maximize, almostMaximize, nextDisplay, reasonableSize
-
     var displayName: String {
         switch self {
-        case .leftHalf: "左半屏"
-        case .rightHalf: "右半屏"
-        case .maximize: "最大化"
-        case .almostMaximize: "几乎最大化"
-        case .nextDisplay: "下一显示器"
-        case .reasonableSize: "合适大小"
+        case .leftHalf: "左半屏"; case .rightHalf: "右半屏"; case .maximize: "最大化"
+        case .almostMaximize: "几乎最大化"; case .nextDisplay: "下一显示器"; case .reasonableSize: "合适大小"
         }
     }
-
     var icon: String {
         switch self {
-        case .leftHalf: "rectangle.lefthalf.inset.filled"
-        case .rightHalf: "rectangle.righthalf.inset.filled"
-        case .maximize: "rectangle.inset.filled"
-        case .almostMaximize: "rectangle.center.inset.filled"
-        case .nextDisplay: "rectangle.2.swap"
-        case .reasonableSize: "rectangle.portrait.center.inset.filled"
+        case .leftHalf: "rectangle.lefthalf.inset.filled"; case .rightHalf: "rectangle.righthalf.inset.filled"
+        case .maximize: "rectangle.inset.filled"; case .almostMaximize: "rectangle.center.inset.filled"
+        case .nextDisplay: "rectangle.2.swap"; case .reasonableSize: "rectangle.portrait.center.inset.filled"
         }
     }
-
     var shortcut: String { String(Self.allCases.firstIndex(of: self)! + 1) }
 }
-
-// MARK: - 窗口管理器（参照 Rectangle 实现）
 
 final class WindowManager {
     static let shared = WindowManager()
@@ -39,19 +25,24 @@ final class WindowManager {
     private init() {}
 
     func execute(_ action: WindowAction) {
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else { return }
-        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
-        var w: AnyObject?
-        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &w) == .success,
-              let window = w else { return }
-        let win = window as! AXUIElement
+        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
+            print("[QKJ] WindowManager: no frontmost application")
+            return
+        }
 
-        // 获取窗口当前位置
+        // 三级 fallback 查找窗口（修复长时间运行后 AX 获取失败）
+        guard let win = findWindow(for: frontApp) else {
+            print("[QKJ] WindowManager: no window for \(frontApp.localizedName ?? "?")")
+            return
+        }
+
         guard let currentFrame = getFrame(win),
-              let screen = screenContaining(currentFrame) else { return }
+              let screen = screenContaining(currentFrame) else {
+            print("[QKJ] WindowManager: cannot get frame/screen")
+            return
+        }
 
-        let vf = screen.visibleFrame  // 已扣除菜单栏/Dock
-
+        let vf = screen.visibleFrame
         let newFrame: CGRect
         switch action {
         case .leftHalf:       newFrame = leftHalfRect(in: vf)
@@ -63,114 +54,95 @@ final class WindowManager {
         }
 
         setFrame(win, newFrame)
-
-        // Rectangle-style best-effort: ensure window fits on screen
         bestEffortAdjust(win, screen: screen)
     }
 
-    // MARK: 位置计算（参照 Rectangle LeftRightHalfCalculation）
+    // MARK: 三级窗口查找（Fallback: focused → main → first in list）
+
+    private func findWindow(for app: NSRunningApplication) -> AXUIElement? {
+        let appEl = AXUIElementCreateApplication(app.processIdentifier)
+        var val: AnyObject?
+
+        // 1. kAXFocusedWindowAttribute
+        if AXUIElementCopyAttributeValue(appEl, kAXFocusedWindowAttribute as CFString, &val) == .success,
+           let w = val { return (w as! AXUIElement) }
+
+        // 2. kAXMainWindowAttribute
+        if AXUIElementCopyAttributeValue(appEl, kAXMainWindowAttribute as CFString, &val) == .success,
+           let w = val { return (w as! AXUIElement) }
+
+        // 3. 遍历 kAXWindowsAttribute 取第一个
+        var windows: AnyObject?
+        if AXUIElementCopyAttributeValue(appEl, kAXWindowsAttribute as CFString, &windows) == .success,
+           let list = windows as? [AXUIElement], !list.isEmpty {
+            return list[0]
+        }
+
+        return nil
+    }
+
+    // MARK: 位置计算
 
     private func leftHalfRect(in vf: CGRect) -> CGRect {
-        CGRect(
-            x: vf.minX + gapSize,
-            y: vf.minY + gapSize,
-            width: vf.width / 2 - gapSize * 1.5,
-            height: vf.height - gapSize * 2
-        )
+        CGRect(x: vf.minX + gapSize, y: vf.minY + gapSize,
+               width: vf.width / 2 - gapSize * 1.5, height: vf.height - gapSize * 2)
     }
 
     private func rightHalfRect(in vf: CGRect) -> CGRect {
-        CGRect(
-            x: vf.minX + vf.width / 2 + gapSize / 2,
-            y: vf.minY + gapSize,
-            width: vf.width / 2 - gapSize * 1.5,
-            height: vf.height - gapSize * 2
-        )
+        CGRect(x: vf.minX + vf.width / 2 + gapSize / 2, y: vf.minY + gapSize,
+               width: vf.width / 2 - gapSize * 1.5, height: vf.height - gapSize * 2)
     }
 
-    private func maximizeRect(in vf: CGRect) -> CGRect {
-        vf
-    }
+    private func maximizeRect(in vf: CGRect) -> CGRect { vf }
 
-    /// 参照 Rectangle AlmostMaximizeCalculation: 默认 90% 宽高
     private func almostMaximizeRect(in vf: CGRect) -> CGRect {
-        let ratio: CGFloat = 0.9
-        let w = vf.width * ratio
-        let h = vf.height * ratio
-        return CGRect(
-            x: vf.minX + (vf.width - w) / 2,
-            y: vf.minY + (vf.height - h) / 2,
-            width: w, height: h
-        )
+        let w = vf.width * 0.9, h = vf.height * 0.9
+        return CGRect(x: vf.minX + (vf.width - w) / 2, y: vf.minY + (vf.height - h) / 2, width: w, height: h)
     }
 
-    /// 参照 Rectangle CenterCalculation: 窗口居中，70% 宽 × 80% 高
     private func reasonableSizeRect(in vf: CGRect) -> CGRect {
-        let w = vf.width * 0.7
-        let h = vf.height * 0.8
-        return CGRect(
-            x: vf.minX + (vf.width - w) / 2,
-            y: vf.minY + (vf.height - h) / 2,
-            width: w, height: h
-        )
+        let w = vf.width * 0.7, h = vf.height * 0.8
+        return CGRect(x: vf.minX + (vf.width - w) / 2, y: vf.minY + (vf.height - h) / 2, width: w, height: h)
     }
 
-    /// 参照 Rectangle NextPrevDisplayCalculation
     private func nextDisplayRect(from currentScreen: NSScreen, current frame: CGRect) -> CGRect {
         let screens = NSScreen.screens
         guard screens.count > 1 else { return frame }
         let idx = screens.firstIndex(of: currentScreen) ?? 0
-        let next = screens[(idx + 1) % screens.count]
-        return maximizeRect(in: next.visibleFrame)
+        return maximizeRect(in: screens[(idx + 1) % screens.count].visibleFrame)
     }
 
-    // MARK: AX API（参照 Rectangle StandardWindowMover）
+    // MARK: AX Helpers
 
     private func getFrame(_ window: AXUIElement) -> CGRect? {
-        var posVal: AnyObject?, sizeVal: AnyObject?
-        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posVal) == .success,
-              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeVal) == .success
+        var pVal: AnyObject?, sVal: AnyObject?
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &pVal) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sVal) == .success
         else { return nil }
-
         var pos = CGPoint.zero, size = CGSize.zero
-        AXValueGetValue(posVal as! AXValue, .cgPoint, &pos)
-        AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
+        AXValueGetValue(pVal as! AXValue, .cgPoint, &pos)
+        AXValueGetValue(sVal as! AXValue, .cgSize, &size)
         return CGRect(origin: pos, size: size)
     }
 
     private func setFrame(_ window: AXUIElement, _ frame: CGRect) {
         var pos = frame.origin, size = frame.size
-        guard let pv = AXValueCreate(.cgPoint, &pos),
-              let sv = AXValueCreate(.cgSize, &size) else { return }
+        guard let pv = AXValueCreate(.cgPoint, &pos), let sv = AXValueCreate(.cgSize, &size) else { return }
         AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, pv)
         AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sv)
     }
 
-    /// Rectangle-style best-effort: 如果窗口超出屏幕边界，往回拉
     private func bestEffortAdjust(_ window: AXUIElement, screen: NSScreen) {
         guard var frame = getFrame(window) else { return }
         let vf = screen.visibleFrame
         var adjusted = false
-
         if frame.minX < vf.minX { frame.origin.x = vf.minX; adjusted = true }
         if frame.maxX > vf.maxX { frame.origin.x = vf.maxX - frame.width; adjusted = true }
-        // AX 坐标系 Y 轴向下，需翻转比较
-        // Rectangle 使用 screenFlipped: CGRect → 翻转 Y → 计算 → 翻转回
-        // 简化：直接比较 flipped 坐标
-        // frame 的 bottom (在 AppKit 坐标中) = screen.maxY - (frame.origin.y + frame.height) 
-        // AppKit: y=0 at bottom. AX: y=0 at top.
-        // frame.origin.y (AX) 是顶部距离。窗口底部 = frame.origin.y + frame.height
         if frame.origin.y < vf.minY { frame.origin.y = vf.minY; adjusted = true }
         let axBottom = frame.origin.y + frame.height
-        // visibleFrame uses AppKit coordinates (origin at bottom-left)
-        // AX uses CG coordinates (origin at top-left)
-        // Conversion: axY = screenHeight - appKitY - height
-        // For simplicity, use a safe approach
         if axBottom > vf.origin.y + vf.size.height {
-            frame.origin.y = vf.origin.y + vf.size.height - frame.size.height
-            adjusted = true
+            frame.origin.y = vf.origin.y + vf.size.height - frame.size.height; adjusted = true
         }
-
         if adjusted { setFrame(window, frame) }
     }
 
