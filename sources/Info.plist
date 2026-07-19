@@ -3,42 +3,34 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>QuickFolderJump</string>
+	<string>QuickKeyJump</string>
 	<key>CFBundleExecutable</key>
-	<string>QuickFolderJump</string>
+	<string>QuickKeyJump</string>
 	<key>CFBundleIconFile</key>
-	<string></string>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.quickfolderjump.app</string>
+	<string>com.quickkeyjump.app</string>
 	<key>CFBundleName</key>
-	<string>QuickFolderJump</string>
+	<string>QuickKeyJump</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.5.0</string>
+	<string>3.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>2.5.0</string>
+	<string>3.0.0</string>
 	<key>LSBackgroundOnly</key>
 	<false/>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>LSVisibleInClassic</key>
-	<false/>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>QuickFolderJump 需要辅助功能权限来检测前台窗口是否为保存/打开对话框，以便自动导航到您选择的目录。</string>
+	<string>QuickKeyJump 需要辅助功能权限来检测前台窗口和对话框。</string>
 	<key>NSAppSleepDisabled</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>QuickFolderJump 需要控制 Finder 的权限，以便在对话框中自动导航到您选择的目录。</string>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>QuickFolderJump 需要访问您的文档目录以获取最近使用的文件夹列表。</string>
+	<string>QuickKeyJump 需要控制 Finder 的权限来自动导航到选定目录。</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-	<key>NSMainStoryboardFile</key>
-	<string></string>
-	<key>UISupportedInterfaceOrientations</key>
-	<array/>
 </dict>
 </plist>
