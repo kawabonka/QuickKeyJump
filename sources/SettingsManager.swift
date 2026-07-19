@@ -1,26 +1,39 @@
 import Foundation
 import Carbon
 
-// MARK: - Action Types
-
 enum ActionType: String, CaseIterable {
     case quickJump = "quickJump"
     case defaultBrowser = "defaultBrowser"
-    case windowManagement = "windowManagement"
+    case windowLeftHalf = "windowLeftHalf"
+    case windowRightHalf = "windowRightHalf"
+    case windowMaximize = "windowMaximize"
+    case windowAlmostMaximize = "windowAlmostMaximize"
+    case windowNextDisplay = "windowNextDisplay"
+    case windowReasonableSize = "windowReasonableSize"
 
     var displayName: String {
         switch self {
         case .quickJump: return "快速跳转"
         case .defaultBrowser: return "默认浏览器"
-        case .windowManagement: return "窗口管理"
+        case .windowLeftHalf: return "左半屏"
+        case .windowRightHalf: return "右半屏"
+        case .windowMaximize: return "最大化"
+        case .windowAlmostMaximize: return "几乎最大化"
+        case .windowNextDisplay: return "下一显示器"
+        case .windowReasonableSize: return "合适大小"
         }
     }
 
     var description: String {
         switch self {
-        case .quickJump: return "弹出最近文件夹面板，快速跳转到目标目录"
+        case .quickJump: return "弹出最近文件夹面板"
         case .defaultBrowser: return "打开系统默认浏览器"
-        case .windowManagement: return "左半屏 / 右半屏 / 最大化 / 下一显示器"
+        case .windowLeftHalf: return "窗口占据屏幕左半区域"
+        case .windowRightHalf: return "窗口占据屏幕右半区域"
+        case .windowMaximize: return "窗口最大化"
+        case .windowAlmostMaximize: return "窗口几乎占满屏幕"
+        case .windowNextDisplay: return "将窗口移至下一显示器"
+        case .windowReasonableSize: return "缩放至合适阅读尺寸"
         }
     }
 
@@ -28,7 +41,12 @@ enum ActionType: String, CaseIterable {
         switch self {
         case .quickJump: return "folder.fill"
         case .defaultBrowser: return "safari.fill"
-        case .windowManagement: return "rectangle.3.group"
+        case .windowLeftHalf: return "rectangle.lefthalf.inset.filled"
+        case .windowRightHalf: return "rectangle.righthalf.inset.filled"
+        case .windowMaximize: return "rectangle.inset.filled"
+        case .windowAlmostMaximize: return "rectangle.center.inset.filled"
+        case .windowNextDisplay: return "rectangle.2.swap"
+        case .windowReasonableSize: return "rectangle.portrait.center.inset.filled"
         }
     }
 
@@ -38,36 +56,39 @@ enum ActionType: String, CaseIterable {
             return Shortcut(keyCode: UInt16(kVK_ANSI_G), modifiers: UInt(optionKey | cmdKey))
         case .defaultBrowser:
             return Shortcut(keyCode: UInt16(kVK_ANSI_E), modifiers: UInt(cmdKey))
-        case .windowManagement:
-            return Shortcut(keyCode: UInt16(kVK_ANSI_Z), modifiers: UInt(optionKey | cmdKey))
+        case .windowLeftHalf:
+            return Shortcut(keyCode: 123, modifiers: UInt(controlKey | shiftKey))
+        case .windowRightHalf:
+            return Shortcut(keyCode: 124, modifiers: UInt(controlKey | shiftKey))
+        case .windowMaximize:
+            return Shortcut(keyCode: 126, modifiers: UInt(controlKey | optionKey))
+        case .windowAlmostMaximize:
+            return Shortcut(keyCode: 126, modifiers: UInt(optionKey | cmdKey))
+        case .windowNextDisplay:
+            return Shortcut(keyCode: 124, modifiers: UInt(controlKey | optionKey))
+        case .windowReasonableSize:
+            return Shortcut(keyCode: 125, modifiers: UInt(controlKey | optionKey))
         }
     }
 
-    /// 每个 ActionType 对应的 Carbon 热键唯一 ID（signature 低 16 位）
     var hotKeyID: UInt32 {
-        switch self {
-        case .quickJump: return 1
-        case .defaultBrowser: return 2
-        case .windowManagement: return 3
-        }
+        UInt32(Self.allCases.firstIndex(of: self)!) + 1
     }
 }
-
-// MARK: - Shortcut Model
 
 struct Shortcut: Codable, Equatable {
     let keyCode: UInt16
     let modifiers: UInt
 
     var displayString: String {
-        "\(modifierDisplayString)\(keyCodeDisplayString)"
+        modifierDisplayString + keyCodeDisplayString
     }
 
     private var modifierDisplayString: String {
         var parts: [String] = []
-        if modifiers & UInt(controlKey) != 0 { parts.append("⌃") }
-        if modifiers & UInt(optionKey) != 0 { parts.append("⌥") }
-        if modifiers & UInt(shiftKey) != 0 { parts.append("⇧") }
+        if modifiers & UInt(controlKey) != 0 { parts.append("\u{2303}") }
+        if modifiers & UInt(optionKey) != 0 { parts.append("\u{2325}") }
+        if modifiers & UInt(shiftKey) != 0 { parts.append("\u{21E7}") }
         if modifiers & UInt(cmdKey) != 0 { parts.append("⌘") }
         return parts.joined()
     }
@@ -75,13 +96,7 @@ struct Shortcut: Codable, Equatable {
     private var keyCodeDisplayString: String {
         SettingsManager.keyCodeToChar(keyCode)
     }
-
-    var hasModifiers: Bool {
-        modifiers != 0
-    }
 }
-
-// MARK: - Settings Manager
 
 final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
@@ -91,11 +106,7 @@ final class SettingsManager: ObservableObject {
 
     @Published private(set) var shortcuts: [ActionType: Shortcut] = [:]
 
-    private init() {
-        load()
-    }
-
-    // MARK: Shortcut Access
+    private init() { load() }
 
     func shortcut(for action: ActionType) -> Shortcut {
         shortcuts[action] ?? action.defaultShortcut
@@ -115,8 +126,6 @@ final class SettingsManager: ObservableObject {
         objectWillChange.send()
     }
 
-    // MARK: Persistence
-
     private func save() {
         let encoded = shortcuts.mapValues { ["keyCode": $0.keyCode, "modifiers": $0.modifiers] }
         defaults.set(encoded, forKey: shortcutsKey)
@@ -126,9 +135,7 @@ final class SettingsManager: ObservableObject {
     private func load() {
         guard let encoded = defaults.dictionary(forKey: shortcutsKey) as? [String: [String: UInt]]
         else {
-            for action in ActionType.allCases {
-                shortcuts[action] = action.defaultShortcut
-            }
+            for action in ActionType.allCases { shortcuts[action] = action.defaultShortcut }
             return
         }
         for action in ActionType.allCases {
@@ -142,78 +149,29 @@ final class SettingsManager: ObservableObject {
         }
     }
 
-    // MARK: Key Code Display
-
     static func keyCodeToChar(_ keyCode: UInt16) -> String {
         switch keyCode {
-        case UInt16(kVK_ANSI_A): return "A"
-        case UInt16(kVK_ANSI_B): return "B"
-        case UInt16(kVK_ANSI_C): return "C"
-        case UInt16(kVK_ANSI_D): return "D"
-        case UInt16(kVK_ANSI_E): return "E"
-        case UInt16(kVK_ANSI_F): return "F"
-        case UInt16(kVK_ANSI_G): return "G"
-        case UInt16(kVK_ANSI_H): return "H"
-        case UInt16(kVK_ANSI_I): return "I"
-        case UInt16(kVK_ANSI_J): return "J"
-        case UInt16(kVK_ANSI_K): return "K"
-        case UInt16(kVK_ANSI_L): return "L"
-        case UInt16(kVK_ANSI_M): return "M"
-        case UInt16(kVK_ANSI_N): return "N"
-        case UInt16(kVK_ANSI_O): return "O"
-        case UInt16(kVK_ANSI_P): return "P"
-        case UInt16(kVK_ANSI_Q): return "Q"
-        case UInt16(kVK_ANSI_R): return "R"
-        case UInt16(kVK_ANSI_S): return "S"
-        case UInt16(kVK_ANSI_T): return "T"
-        case UInt16(kVK_ANSI_U): return "U"
-        case UInt16(kVK_ANSI_V): return "V"
-        case UInt16(kVK_ANSI_W): return "W"
-        case UInt16(kVK_ANSI_X): return "X"
-        case UInt16(kVK_ANSI_Y): return "Y"
-        case UInt16(kVK_ANSI_S): return "Z"
-        case UInt16(kVK_ANSI_0): return "0"
-        case UInt16(kVK_ANSI_1): return "1"
-        case UInt16(kVK_ANSI_2): return "2"
-        case UInt16(kVK_ANSI_3): return "3"
-        case UInt16(kVK_ANSI_4): return "4"
-        case UInt16(kVK_ANSI_5): return "5"
-        case UInt16(kVK_ANSI_6): return "6"
-        case UInt16(kVK_ANSI_7): return "7"
-        case UInt16(kVK_ANSI_8): return "8"
-        case UInt16(kVK_ANSI_9): return "9"
-        case UInt16(kVK_Space): return "␣"
-        case UInt16(kVK_Return): return "↵"
-        case UInt16(kVK_Tab): return "⇥"
-        case UInt16(kVK_Delete): return "⌫"
-        case UInt16(kVK_Escape): return "Esc"
-        case UInt16(kVK_ForwardDelete): return "⌦"
-        case UInt16(kVK_UpArrow): return "↑"
-        case UInt16(kVK_DownArrow): return "↓"
-        case UInt16(kVK_LeftArrow): return "←"
-        case UInt16(kVK_RightArrow): return "→"
-        case UInt16(kVK_F1): return "F1"
-        case UInt16(kVK_F2): return "F2"
-        case UInt16(kVK_F3): return "F3"
-        case UInt16(kVK_F4): return "F4"
-        case UInt16(kVK_F5): return "F5"
-        case UInt16(kVK_F6): return "F6"
-        case UInt16(kVK_F7): return "F7"
-        case UInt16(kVK_F8): return "F8"
-        case UInt16(kVK_F9): return "F9"
-        case UInt16(kVK_F10): return "F10"
-        case UInt16(kVK_F11): return "F11"
-        case UInt16(kVK_F12): return "F12"
-        case UInt16(kVK_ANSI_Equal): return "="
-        case UInt16(kVK_ANSI_Minus): return "-"
-        case UInt16(kVK_ANSI_LeftBracket): return "["
-        case UInt16(kVK_ANSI_RightBracket): return "]"
-        case UInt16(kVK_ANSI_Slash): return "/"
-        case UInt16(kVK_ANSI_Backslash): return "\\"
-        case UInt16(kVK_ANSI_Semicolon): return ";"
-        case UInt16(kVK_ANSI_Quote): return "'"
-        case UInt16(kVK_ANSI_Comma): return ","
-        case UInt16(kVK_ANSI_Period): return "."
+        case 0: return "A"; case 1: return "S"; case 2: return "D"; case 3: return "F"
+        case 4: return "H"; case 5: return "G"; case 6: return "Z"; case 7: return "X"
+        case 8: return "C"; case 9: return "V"; case 11: return "B"; case 12: return "Q"
+        case 13: return "W"; case 14: return "E"; case 15: return "R"; case 16: return "Y"
+        case 17: return "T"; case 31: return "O"; case 32: return "U"; case 34: return "I"
+        case 35: return "P"; case 37: return "L"; case 38: return "J"; case 40: return "K"
+        case 45: return "N"; case 46: return "M"; case 29: return "0"; case 18: return "1"
+        case 19: return "2"; case 20: return "3"; case 21: return "4"; case 23: return "5"
+        case 22: return "6"; case 26: return "7"; case 28: return "8"; case 25: return "9"
+        case 49: return "\u{2423}"; case 36: return "\u{21B5}"; case 48: return "\u{21E5}"
+        case 51: return "\u{232B}"; case 53: return "Esc"; case 117: return "\u{2326}"
+        case 126: return "\u{2191}"; case 125: return "\u{2193}"
+        case 123: return "\u{2190}"; case 124: return "\u{2192}"
+        case 122: return "F1"; case 120: return "F2"; case 99: return "F3"
+        case 118: return "F4"; case 96: return "F5"; case 97: return "F6"
+        case 98: return "F7"; case 100: return "F8"; case 101: return "F9"
+        case 109: return "F10"; case 103: return "F11"; case 111: return "F12"
+        case 24: return "="; case 27: return "-"; case 33: return "["
+        case 30: return "]"; case 44: return "/"; case 42: return "\\"
+        case 41: return ";"; case 39: return "'"; case 43: return ","
+        case 47: return "."
         default: return "?"
         }
     }

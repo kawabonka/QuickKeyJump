@@ -49,9 +49,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem?.button else { return }
 
-        let cmdIcon = NSImage(systemSymbolName: "command", accessibilityDescription: "QuickKeyJump")
-        cmdIcon?.isTemplate = true
-        button.image = cmdIcon
+        let icon = createMenuBarIcon()
+        button.image = icon
 
         let menu = NSMenu(title: "QuickKeyJump")
 
@@ -194,7 +193,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .quickJump:      executeQuickJump()
         case .defaultBrowser: executeDefaultBrowser()
-        case .windowManagement: executeWindowManagement()
+        case .windowLeftHalf,
+             .windowRightHalf,
+             .windowMaximize,
+             .windowAlmostMaximize,
+             .windowNextDisplay,
+             .windowReasonableSize:   executeWindowAction(action)
         }
     }
 
@@ -284,32 +288,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 窗口管理
 
-    private var windowManagementPanel: WindowManagementPanel?
-
-    private func executeWindowManagement() {
-        if windowManagementPanel?.isVisible == true {
-            windowManagementPanel?.close()
-            windowManagementPanel = nil
-            return
+    private func executeWindowAction(_ actionName: ActionType) {
+        let wa: WindowAction
+        switch actionName {
+        case .windowLeftHalf:       wa = .leftHalf
+        case .windowRightHalf:      wa = .rightHalf
+        case .windowMaximize:       wa = .maximize
+        case .windowAlmostMaximize: wa = .almostMaximize
+        case .windowNextDisplay:    wa = .nextDisplay
+        case .windowReasonableSize: wa = .reasonableSize
+        default: return
         }
-        let panel = WindowManagementPanel()
-        panel.onAction = { [weak self, weak panel] action in
-            panel?.close()
-            self?.windowManagementPanel = nil
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                WindowManager.shared.execute(action)
-            }
-        }
-        panel.onCancel = { [weak self] in
-            self?.windowManagementPanel = nil
-        }
-        panel.center()
-        panel.makeKeyAndOrderFront(nil)
-        windowManagementPanel = panel
-        NSApp.activate(ignoringOtherApps: true)
+        WindowManager.shared.execute(wa)
     }
 
-    // MARK: 设置窗口
+    // MARK: 设置窗口    // MARK: 设置窗口
 
     @objc private func openSettingsMenuAction() {
         openSettings()
@@ -363,6 +356,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             LaunchManager.enable()
             sender.state = .on
         }
+    }
+
+        private func createMenuBarIcon() -> NSImage {
+        let size = NSSize(width: 35, height: 20)
+        let img = NSImage(size: size)
+        img.isTemplate = true
+        img.lockFocus()
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.black
+        ]
+        NSAttributedString(string: "Q⌘", attributes: attrs).draw(at: NSPoint(x: 2, y: 2))
+        img.unlockFocus()
+        return img
     }
 
     @objc private func quitApplication() {
