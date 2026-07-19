@@ -2,7 +2,7 @@ import Foundation
 
 extension KeyboardShortcuts.Name {
     static let quickJump = Self("quickJump", default: .init(.g, modifiers: [.option, .command]))
-    static let defaultBrowser = Self("defaultBrowser", default: .init(.e, modifiers: [.command]))
+    static let fileManager = Self("fileManager", default: .init(.e, modifiers: [.command]))
     static let windowLeftHalf = Self("windowLeftHalf", default: .init(.leftArrow, modifiers: [.control, .shift]))
     static let windowRightHalf = Self("windowRightHalf", default: .init(.rightArrow, modifiers: [.control, .shift]))
     static let windowMaximize = Self("windowMaximize", default: .init(.upArrow, modifiers: [.control, .option]))
@@ -12,14 +12,14 @@ extension KeyboardShortcuts.Name {
 }
 
 enum ActionType: String, CaseIterable {
-    case quickJump, defaultBrowser
+    case quickJump, fileManager
     case windowLeftHalf, windowRightHalf, windowMaximize
     case windowAlmostMaximize, windowNextDisplay, windowReasonableSize
 
     var name: KeyboardShortcuts.Name {
         switch self {
         case .quickJump:           return .quickJump
-        case .defaultBrowser:      return .defaultBrowser
+        case .fileManager:      return .fileManager
         case .windowLeftHalf:      return .windowLeftHalf
         case .windowRightHalf:     return .windowRightHalf
         case .windowMaximize:      return .windowMaximize
@@ -32,7 +32,7 @@ enum ActionType: String, CaseIterable {
     var displayName: String {
         switch self {
         case .quickJump: "快速跳转"
-        case .defaultBrowser: "默认浏览器"
+        case .fileManager: "文件管理器"
         case .windowLeftHalf: "左半屏"
         case .windowRightHalf: "右半屏"
         case .windowMaximize: "最大化"
@@ -45,7 +45,7 @@ enum ActionType: String, CaseIterable {
     var description: String {
         switch self {
         case .quickJump: "弹出最近文件夹面板"
-        case .defaultBrowser: "打开系统默认浏览器"
+        case .fileManager: "打开 Finder 文件管理器"
         case .windowLeftHalf: "窗口占据屏幕左半区域"
         case .windowRightHalf: "窗口占据屏幕右半区域"
         case .windowMaximize: "窗口最大化"
@@ -58,7 +58,7 @@ enum ActionType: String, CaseIterable {
     var icon: String {
         switch self {
         case .quickJump: "folder.fill"
-        case .defaultBrowser: "safari.fill"
+        case .fileManager: "folder.fill"
         case .windowLeftHalf: "rectangle.lefthalf.inset.filled"
         case .windowRightHalf: "rectangle.righthalf.inset.filled"
         case .windowMaximize: "rectangle.inset.filled"

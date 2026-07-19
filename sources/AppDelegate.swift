@@ -34,8 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.onKeyDown(for: .quickJump) { [weak self] in
             self?.executeQuickJump()
         }
-        KeyboardShortcuts.onKeyDown(for: .defaultBrowser) { [weak self] in
-            self?.executeDefaultBrowser()
+        KeyboardShortcuts.onKeyDown(for: .fileManager) { [weak self] in
+            self?.executeFileManager()
         }
         for action in ActionType.allCases where action.windowAction != nil {
             KeyboardShortcuts.onKeyDown(for: action.name) { [weak self] in
@@ -140,8 +140,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 默认浏览器
 
-    private func executeDefaultBrowser() {
-        if let u = URL(string: "https://") { NSWorkspace.shared.open(u) }
+    private func executeFileManager() {
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: NSHomeDirectory())
     }
 
     // MARK: 窗口管理（直接下发到 WindowManager）
