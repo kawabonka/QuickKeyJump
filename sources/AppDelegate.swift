@@ -18,6 +18,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerAllShortcuts()
         folderManager.loadRecentFolders(maxResults: 5)
         LaunchManager.syncWithPreference()
+        NotificationCenter.default.addObserver(
+            forName: .triggerAction, object: nil, queue: .main
+        ) { [weak self] n in
+            guard let action = n.userInfo?["action"] as? ActionType else { return }
+            self?.executeAction(action)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkAccessibilityPermission()
         }
@@ -145,6 +151,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: 窗口管理（直接下发到 WindowManager）
+
+        func executeAction(_ action: ActionType) {
+        switch action {
+        case .quickJump:      executeQuickJump()
+        case .fileManager:    executeFileManager()
+        case .windowLeftHalf, .windowRightHalf, .windowMaximize,
+             .windowAlmostMaximize, .windowNextDisplay, .windowReasonableSize:
+            executeWindowAction(action)
+        }
+    }
 
     private func executeWindowAction(_ type: ActionType) {
         guard let wa = type.windowAction else { return }

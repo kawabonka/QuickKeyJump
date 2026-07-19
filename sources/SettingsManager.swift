@@ -80,3 +80,4 @@ enum ActionType: String, CaseIterable {
         }
     }
 }
+extension Notification.Name { static let triggerAction = Notification.Name("QKJ_triggerAction") }

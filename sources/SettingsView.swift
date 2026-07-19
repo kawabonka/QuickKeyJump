@@ -105,6 +105,13 @@ private struct ShortcutRowView: View {
                 .frame(width: 28, height: 28)
                 .background(Color.accentColor.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+                .onTapGesture {
+                    NotificationCenter.default.post(
+                        name: .triggerAction, object: nil,
+                        userInfo: ["action": action]
+                    )
+                }
+                .help("点击触发 " + action.displayName)
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.displayName).font(.system(size: 13, weight: .medium))
                 Text(action.description).font(.system(size: 11)).foregroundColor(.secondary)
