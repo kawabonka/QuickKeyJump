@@ -24,6 +24,7 @@ SOURCES := \
 	QuickJumpPanel.swift \
 	DialogNavigator.swift \
 	FinderWindowNavigator.swift \
+	LaunchManager.swift \
 	AppDelegate.swift
 
 # 需要链接的系统框架

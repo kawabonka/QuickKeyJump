@@ -46,6 +46,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 初始化最近目录数据
         folderManager.loadRecentFolders(maxResults: 5)
         
+        // 同步开机自启偏好
+        LaunchManager.syncWithPreference()
+
         // 首次运行检查权限
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkAccessibilityPermission()
@@ -99,6 +102,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         refreshItem.target = self
         menu.addItem(refreshItem)
+        
+        // 开机自启开关
+        let autoStartItem = NSMenuItem(
+            title: NSLocalizedString("开机自动启动", comment: ""),
+            action: #selector(toggleAutoStart),
+            keyEquivalent: ""
+        )
+        autoStartItem.target = self
+        autoStartItem.state = LaunchManager.isEnabled ? .on : .off
+        menu.addItem(autoStartItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -406,6 +419,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermission(showAlert: true)
     }
     
+    /// 切换开机自启
+    @objc private func toggleAutoStart(_ sender: NSMenuItem) {
+        if LaunchManager.isEnabled {
+            LaunchManager.disable()
+            sender.state = .off
+        } else {
+            LaunchManager.enable()
+            sender.state = .on
+        }
+    }
+
     /// 退出应用
     @objc private func quitApplication() {
         NSApplication.shared.terminate(self)
