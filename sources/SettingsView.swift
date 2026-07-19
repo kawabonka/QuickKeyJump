@@ -77,10 +77,7 @@ struct ShortcutRowView: View {
                 isRecording = false
             }
         }
-        panel.center()
-        panel.makeKeyAndOrderFront(nil)
-
-        // 激活应用使其获得键盘焦点
+        panel.beginRecording()
         NSApp.activate(ignoringOtherApps: true)
     }
 }
@@ -158,7 +155,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
         }
-        .frame(maxHeight: 240)
+        
     }
 
     private var footerView: some View {

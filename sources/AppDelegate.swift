@@ -319,17 +319,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.reRegisterAllHotKeys()
         }
         let hostingView = NSHostingView(rootView: settingsView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 480, height: 380)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 480, height: 560)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 380),
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "QuickKeyJump 偏好设置"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 360, height: 400)
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
