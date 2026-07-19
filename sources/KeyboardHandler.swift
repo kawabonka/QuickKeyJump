@@ -5,6 +5,7 @@ import Cocoa
 /// 键盘事件处理器
 /// 将 NSPanel 接收到的键盘事件转换为业务操作
 /// 负责识别数字键 1-5、方向键、回车键和 ESC 键，并回调对应操作
+/// 支持 Cmd 修饰键：Cmd+数字键 或 Cmd+Enter 触发"在访达中打开"
 final class KeyboardHandler {
 
     // MARK: - 回调闭包
@@ -21,13 +22,18 @@ final class KeyboardHandler {
     /// 确认当前选择（回车键）
     var onConfirm: (() -> Void)?
 
+    /// 在访达中打开当前选中项（Cmd+Enter）
+    var onCmdEnter: (() -> Void)?
+
+    /// 通过 Cmd+数字键 在访达中打开指定索引（0-4）
+    var onCmdSelectIndex: ((Int) -> Void)?
+
     /// 取消/关闭窗口（ESC 键）
     var onCancel: (() -> Void)?
 
     // MARK: - KeyCode 常量定义
 
     /// macOS 键盘按键的 KeyCode 常量
-    /// 参考: https://developer.apple.com/documentation/appkit/nsevent/1535851-function-key_unicodes
     private enum KeyCode {
         static let one:   UInt16 = 18   // 数字键 1
         static let two:   UInt16 = 19   // 数字键 2
@@ -52,25 +58,31 @@ final class KeyboardHandler {
         }
 
         let keyCode = event.keyCode
+        let hasCmd = event.modifierFlags.contains(.command)
 
         switch keyCode {
         case KeyCode.one:
+            if hasCmd { onCmdSelectIndex?(0); return true }
             onSelectIndex?(0)
             return true
 
         case KeyCode.two:
+            if hasCmd { onCmdSelectIndex?(1); return true }
             onSelectIndex?(1)
             return true
 
         case KeyCode.three:
+            if hasCmd { onCmdSelectIndex?(2); return true }
             onSelectIndex?(2)
             return true
 
         case KeyCode.four:
+            if hasCmd { onCmdSelectIndex?(3); return true }
             onSelectIndex?(3)
             return true
 
         case KeyCode.five:
+            if hasCmd { onCmdSelectIndex?(4); return true }
             onSelectIndex?(4)
             return true
 
@@ -83,6 +95,7 @@ final class KeyboardHandler {
             return true
 
         case KeyCode.enter:
+            if hasCmd { onCmdEnter?(); return true }
             onConfirm?()
             return true
 

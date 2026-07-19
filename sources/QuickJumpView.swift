@@ -1,9 +1,11 @@
 import SwiftUI
+import Cocoa
 
 // MARK: - 快速跳转主视图
 
 /// 快速跳转主视图
 /// 显示 5 个最近使用的目录，支持键盘上下选择、数字键快速跳转
+/// Cmd+数字键 / Cmd+Enter 在访达中打开文件夹
 /// 整体风格参考 macOS Spotlight，简洁紧凑
 struct QuickJumpView: View {
 
@@ -77,6 +79,9 @@ struct QuickJumpView: View {
         .onReceive(NotificationCenter.default.publisher(for: .quickJumpConfirmSelection)) { _ in
             confirmSelection()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .quickJumpOpenFinder)) { _ in
+            openCurrentInFinder()
+        }
     }
 
     // MARK: - 子视图
@@ -117,41 +122,42 @@ struct QuickJumpView: View {
 
     /// 底部提示栏视图
     private var footerView: some View {
-        HStack(spacing: 4) {
-            // 提示文字使用小字体，灰色
-            Text("↑↓ 选择")
+        HStack(spacing: 2) {
+            separatorDot
+            Text("1-5 跳转")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
 
-            Text("·")
+            separatorDot
+            Text("⌘1-5 访达")
                 .font(.system(size: 11))
-                .foregroundColor(.secondary.opacity(0.6))
-                .padding(.horizontal, 4)
+                .foregroundColor(.secondary)
 
+            separatorDot
             Text("↵ 确认")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
 
-            Text("·")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary.opacity(0.6))
-                .padding(.horizontal, 4)
-
-            Text("⌘1-5 快速跳转")
+            separatorDot
+            Text("⌘↵ 访达")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
 
-            Text("·")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary.opacity(0.6))
-                .padding(.horizontal, 4)
-
+            separatorDot
             Text("Esc 取消")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
         .frame(height: 32)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 分隔圆点
+    private var separatorDot: some View {
+        Text("·")
+            .font(.system(size: 11))
+            .foregroundColor(.secondary.opacity(0.5))
+            .padding(.horizontal, 3)
     }
 
     // MARK: - 公开操作（供外部调用）
@@ -182,7 +188,6 @@ struct QuickJumpView: View {
     func confirmSelection() {
         let count = folderManager.folders.count
         guard selectedIndex >= 0, selectedIndex < count else {
-            // 没有有效选择时直接关闭
             onCancel()
             return
         }
@@ -192,6 +197,17 @@ struct QuickJumpView: View {
 
     /// 取消操作，关闭窗口
     func cancel() {
+        onCancel()
+    }
+
+    // MARK: - 访达打开
+
+    /// 在访达中打开当前选中项
+    private func openCurrentInFinder() {
+        let count = folderManager.folders.count
+        guard selectedIndex >= 0, selectedIndex < count else { return }
+        let folder = folderManager.folders[selectedIndex]
+        NSWorkspace.shared.open(URL(fileURLWithPath: folder.path))
         onCancel()
     }
 

@@ -12,6 +12,7 @@ import SwiftUI
 /// - 预创建窗口保证响应速度（首次弹出无延迟）
 /// - 激活策略自动切换（从 LSUIElement 到 Regular）
 /// - 支持键盘导航和鼠标点击选择
+/// - Cmd+数字键 / Cmd+Enter 在访达中打开文件夹
 final class QuickJumpPanel: NSObject {
 
     // MARK: - 单例
@@ -270,13 +271,21 @@ final class QuickJumpPanel: NSObject {
 
     /// 配置键盘事件处理器
     private func setupKeyboardHandler() {
-        // 数字键 1-5：直接从文件夹管理器中取出对应索引的文件夹并确认
+        // 数字键 1-5：直接从文件夹管理器中取出对应索引的文件夹并确认跳转
         keyboardHandler.onSelectIndex = { [weak self] index in
             guard let self = self else { return }
             guard let folders = self.folderManager?.folders,
                   index < folders.count else { return }
             let folder = folders[index]
             self.handleSelect(folder: folder)
+        }
+
+        // Cmd+数字键 1-5：在访达中打开对应索引的文件夹
+        keyboardHandler.onCmdSelectIndex = { [weak self] index in
+            guard let self = self else { return }
+            guard let folders = self.folderManager?.folders,
+                  index < folders.count else { return }
+            self.openInFinder(folders[index])
         }
 
         // 上下箭头：通过 NotificationCenter 通知 SwiftUI 视图更新选中状态
@@ -293,6 +302,17 @@ final class QuickJumpPanel: NSObject {
             self?.confirmCurrentSelection()
         }
 
+        // Cmd+Enter：在访达中打开当前选中项
+        keyboardHandler.onCmdEnter = { [weak self] in
+            guard let self = self else { return }
+            guard self.folderManager?.folders != nil else { return }
+            // 通过通知获取当前选中索引
+            NotificationCenter.default.post(
+                name: .quickJumpOpenFinder,
+                object: nil
+            )
+        }
+
         // ESC 取消
         keyboardHandler.onCancel = { [weak self] in
             self?.handleCancel()
@@ -301,9 +321,6 @@ final class QuickJumpPanel: NSObject {
 
     /// 更新选中索引（通过重新创建视图或使用绑定）
     private func updateSelection(direction: Int) {
-        // 由于 SwiftUI 的 @State 无法从外部直接修改，
-        // 我们需要通过 NSViewController 或者 Notification 来传递键盘事件
-        // 这里使用 NotificationCenter 通知 SwiftUI 视图更新选中状态
         NotificationCenter.default.post(
             name: .quickJumpMoveSelection,
             object: nil,
@@ -313,11 +330,20 @@ final class QuickJumpPanel: NSObject {
 
     /// 确认当前选择
     private func confirmCurrentSelection() {
-        // 同样通过通知方式告知 SwiftUI 视图执行确认
         NotificationCenter.default.post(
             name: .quickJumpConfirmSelection,
             object: nil
         )
+    }
+
+    // MARK: - 在访达中打开
+
+    /// 在访达中打开指定文件夹
+    private func openInFinder(_ folder: RecentFolder) {
+        let url = URL(fileURLWithPath: folder.path)
+        NSWorkspace.shared.open(url)
+        // 关闭面板
+        close()
     }
 
     // MARK: - 激活策略管理
@@ -353,7 +379,6 @@ final class QuickJumpPanel: NSObject {
         }
 
         // 2. 本地鼠标监控：检测在当前应用内部、但不在面板窗口上的点击
-        // 例如点击菜单栏、Dock 等区域
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self else { return event }
             if let clickWindow = event.window, clickWindow != self.panel {
@@ -403,9 +428,7 @@ extension QuickJumpPanel: NSWindowDelegate {
 
     /// 窗口失去 Key 状态时自动关闭
     func windowDidResignKey(_ notification: Notification) {
-        // 短暂延迟后关闭，避免在切换应用时误关闭
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            // 如果窗口仍然显示且确实失去了 key 状态，则关闭
             if self?.isVisible == true && self?.panel?.isKeyWindow == false {
                 self?.handleCancel()
             }
@@ -428,12 +451,9 @@ final class QuickJumpPanelWindow: NSPanel {
 
     /// 拦截键盘事件
     override func keyDown(with event: NSEvent) {
-        // 尝试让键盘处理器消费事件
         if let handler = keyboardHandler, handler.handleKeyEvent(event) {
-            // 事件已被消费，不再传递
             return
         }
-        // 未消费的事件继续传递
         super.keyDown(with: event)
     }
 
@@ -462,4 +482,7 @@ extension Notification.Name {
 
     /// 确认当前选择通知
     static let quickJumpConfirmSelection = Notification.Name("quickJumpConfirmSelection")
+
+    /// 在访达中打开当前选中项通知
+    static let quickJumpOpenFinder = Notification.Name("quickJumpOpenFinder")
 }
