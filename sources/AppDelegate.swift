@@ -58,21 +58,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = createMenuBarIcon()
 
         let menu = NSMenu(title: "QuickKeyJump")
-        let prefsItem = NSMenuItem(title: "偏好设置...", action: #selector(openSettingsMenuAction), keyEquivalent: ",")
+        let prefsItem = NSMenuItem(title: L("偏好设置...", "Preferences..."), action: #selector(openSettingsMenuAction), keyEquivalent: ",")
         prefsItem.target = self; menu.addItem(prefsItem)
         menu.addItem(NSMenuItem.separator())
 
-        let autoItem = NSMenuItem(title: "开机自动启动", action: #selector(toggleAutoStart), keyEquivalent: "")
+        let autoItem = NSMenuItem(title: L("开机自动启动", "Launch at Login"), action: #selector(toggleAutoStart), keyEquivalent: "")
         autoItem.target = self
         autoItem.state = LaunchManager.isEnabled ? .on : .off
         menu.addItem(autoItem)
         menu.addItem(NSMenuItem.separator())
 
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-        menu.addItem(NSMenuItem(title: "QuickKeyJump v\(ver)", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: L("QuickKeyJump v\(ver)", "QuickKeyJump v\(ver)"), action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "退出 QuickKeyJump", action: #selector(quitApplication), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L("退出 QuickKeyJump", "Quit QuickKeyJump"), action: #selector(quitApplication), keyEquivalent: "q")
         quitItem.target = self; menu.addItem(quitItem)
         statusItem?.menu = menu
     }
@@ -179,7 +179,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
-        w.title = "QuickKeyJump 偏好设置"
+        w.title = L("QuickKeyJump 偏好设置", "QuickKeyJump Preferences")
         w.titlebarAppearsTransparent = true
         w.isReleasedWhenClosed = false
         w.minSize = NSSize(width: 360, height: 400)
@@ -216,12 +216,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPermissionAlert(for type: PermissionType) {
         let a = NSAlert()
         a.alertStyle = .warning
-        a.messageText = "需要授权才能使用 QuickKeyJump"
+        a.messageText = L("需要授权才能使用 QuickKeyJump", "Permission Required")
         a.informativeText = type == .accessibility
-            ? "QuickKeyJump 需要「辅助功能」权限。"
-            : "QuickKeyJump 需要控制 Finder 的权限。"
-        a.addButton(withTitle: "打开设置")
-        a.addButton(withTitle: "稍后")
+            ? L("QuickKeyJump 需要「辅助功能」权限。", "QuickKeyJump needs Accessibility permission.")
+            : L("QuickKeyJump 需要控制 Finder 的权限。", "QuickKeyJump needs permission to control Finder.")
+        a.addButton(withTitle: L("打开设置", "Open Settings"))
+        a.addButton(withTitle: L("稍后", "Later"))
         if a.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }

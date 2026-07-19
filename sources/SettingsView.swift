@@ -3,10 +3,10 @@ import SwiftUI
 typealias RecorderCocoa = KeyboardShortcuts.RecorderCocoa
 
 struct SettingsView: View {
+    @AppStorage("AppLanguage") private var language = "zh"
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
-
     @State private var autoLaunch = LaunchManager.isEnabled
 
     var body: some View {
@@ -17,6 +17,7 @@ struct SettingsView: View {
             footerView
         }
         .frame(width: 480)
+        .id(language) // force refresh on language change
         .background(
             VisualEffectView(material: .windowBackground, blendingMode: .behindWindow)
                 .ignoresSafeArea()
@@ -26,12 +27,27 @@ struct SettingsView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("偏好设置").font(.system(size: 16, weight: .bold))
-                Text("自定义全局快捷键").font(.system(size: 11)).foregroundColor(.secondary)
+                Text(L("偏好设置", "Preferences"))
+                    .font(.system(size: 16, weight: .bold))
+                Text(L("自定义全局快捷键", "Customize global shortcuts"))
+                    .font(.system(size: 11)).foregroundColor(.secondary)
             }
             Spacer()
+            languagePicker
         }
         .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
+    }
+
+    private var languagePicker: some View {
+        Picker("", selection: $language) {
+            Text("中文").tag("zh")
+            Text("English").tag("en")
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 120)
+        .onChange(of: language) { _, v in
+            AppLanguage.current = AppLanguage(rawValue: v) ?? .zh
+        }
     }
 
     private var shortcutListView: some View {
@@ -57,7 +73,7 @@ struct SettingsView: View {
                 }) {
                     HStack(spacing: 3) {
                         Image(systemName: "arrow.counterclockwise").font(.system(size: 9))
-                        Text("恢复默认").font(.system(size: 11))
+                        Text(L("恢复默认", "Reset Defaults")).font(.system(size: 11))
                     }
                 }
                 .buttonStyle(.plain).foregroundColor(.secondary)
@@ -65,7 +81,7 @@ struct SettingsView: View {
                 Spacer()
 
                 Toggle(isOn: $autoLaunch) {
-                    Text("开机自启").font(.system(size: 11))
+                    Text(L("开机自启", "Launch at Login")).font(.system(size: 11))
                 }
                 .toggleStyle(.switch)
                 .controlSize(.small)
@@ -80,7 +96,7 @@ struct SettingsView: View {
                 }) {
                     HStack(spacing: 3) {
                         Image(systemName: "hand.raised.fill").font(.system(size: 9))
-                        Text("辅助功能权限…").font(.system(size: 11))
+                        Text(L("辅助功能权限…", "Accessibility…")).font(.system(size: 11))
                     }
                 }
                 .buttonStyle(.plain).foregroundColor(.secondary)
@@ -111,7 +127,8 @@ private struct ShortcutRowView: View {
                         userInfo: ["action": action]
                     )
                 }
-                .help("点击触发 " + action.displayName)
+                .help(L("点击触发 ", "Click to trigger ") + action.displayName)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(action.displayName).font(.system(size: 13, weight: .medium))
                 Text(action.description).font(.system(size: 11)).foregroundColor(.secondary)
@@ -125,18 +142,13 @@ private struct ShortcutRowView: View {
 
 private struct RecorderView: NSViewRepresentable {
     let name: KeyboardShortcuts.Name
-
-    func makeNSView(context: Context) -> RecorderCocoa {
-        RecorderCocoa(for: name)
-    }
-
+    func makeNSView(context: Context) -> RecorderCocoa { RecorderCocoa(for: name) }
     func updateNSView(_ v: RecorderCocoa, context: Context) {}
 }
 
 private struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
-
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
         v.material = material; v.blendingMode = blendingMode; v.state = .active

@@ -31,27 +31,27 @@ enum ActionType: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .quickJump: "快速跳转"
-        case .fileManager: "文件管理器"
-        case .windowLeftHalf: "左半屏"
-        case .windowRightHalf: "右半屏"
-        case .windowMaximize: "最大化"
-        case .windowAlmostMaximize: "几乎最大化"
-        case .windowNextDisplay: "下一显示器"
-        case .windowReasonableSize: "合适大小"
+        case .quickJump: L("快速跳转", "Quick Jump")
+        case .fileManager: L("文件管理器", "File Manager")
+        case .windowLeftHalf: L("左半屏", "Left Half")
+        case .windowRightHalf: L("右半屏", "Right Half")
+        case .windowMaximize: L("最大化", "Maximize")
+        case .windowAlmostMaximize: L("几乎最大化", "Almost Maximize")
+        case .windowNextDisplay: L("下一显示器", "Next Display")
+        case .windowReasonableSize: L("合适大小", "Reasonable Size")
         }
     }
 
     var description: String {
         switch self {
-        case .quickJump: "弹出最近文件夹面板"
-        case .fileManager: "打开 Finder 文件管理器"
-        case .windowLeftHalf: "窗口占据屏幕左半区域"
-        case .windowRightHalf: "窗口占据屏幕右半区域"
-        case .windowMaximize: "窗口最大化"
-        case .windowAlmostMaximize: "窗口几乎占满屏幕"
-        case .windowNextDisplay: "将窗口移至下一显示器"
-        case .windowReasonableSize: "缩放至合适阅读尺寸"
+        case .quickJump: L("弹出最近文件夹面板", "Show recent Finder folders")
+        case .fileManager: L("打开 Finder 文件管理器", "Open Finder home directory")
+        case .windowLeftHalf: L("窗口占据屏幕左半区域", "Window occupies left half of screen")
+        case .windowRightHalf: L("窗口占据屏幕右半区域", "Window occupies right half of screen")
+        case .windowMaximize: L("窗口最大化", "Maximize the window")
+        case .windowAlmostMaximize: L("窗口几乎占满屏幕", "Window almost fills the screen")
+        case .windowNextDisplay: L("将窗口移至下一显示器", "Move window to next display")
+        case .windowReasonableSize: L("缩放至合适阅读尺寸", "Resize to comfortable reading size")
         }
     }
 
