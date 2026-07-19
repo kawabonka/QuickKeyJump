@@ -384,7 +384,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case appleEvents
     }
 
-    private func checkAccessibilityPermission(showAlert: Bool = false) {
+    private func checkAccessibilityPermission(showAlert: Bool = true) {
+        // 首次启动自动触发系统授权弹窗 (showAlert=true)
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: showAlert]
         let isTrusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
         if !isTrusted && !hasShownPermissionAlert {

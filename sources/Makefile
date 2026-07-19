@@ -4,7 +4,7 @@
 APP_NAME := QuickKeyJump
 BUNDLE_ID := com.quickkeyjump.app
 
-BUILD_DIR := .build
+BUILD_DIR := Build
 APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS_DIR := $(APP_BUNDLE)/Contents
 MACOS_DIR := $(CONTENTS_DIR)/MacOS
