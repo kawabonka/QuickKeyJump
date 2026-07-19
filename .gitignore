@@ -1,2 +1,21 @@
-sources/.build/
-*.DS_Store
+# Build output
+.build/
+
+# macOS
+.DS_Store
+
+# App bundle (built by `make build`, not committed)
+QuickFolderJump.app/
+
+# IDE
+.vscode/
+.idea/
+*.xcodeproj
+*.xcworkspace
+
+# Research docs (not needed in repo)
+finder_window_navigation_research.md
+macos_quick_popup_research.md
+macos_recent_folders_research.md
+macos_save_dialog_accessibility_research.md
+plan.md

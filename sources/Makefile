@@ -38,7 +38,7 @@ SWIFTC := swiftc
 # 优化级别：-O（优化）或 -Ounchecked（不检查边界，性能最高）
 OPTIMIZE := -O
 # SDK 路径（自动检测）
-SDK_PATH := $(shell xcrun --show-sdk-path --sdk macosx 2>/dev/null || echo "")
+SDK_PATH := $(shell xcrun --show-sdk-path --sdk macosx15 2>/dev/null || xcrun --show-sdk-path --sdk macosx 2>/dev/null || echo "")
 SDK_FLAGS := $(if $(SDK_PATH),-sdk $(SDK_PATH),)
 
 # 完整编译参数

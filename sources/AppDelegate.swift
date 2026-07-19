@@ -254,7 +254,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// 处理目录选择
     private func handleFolderSelection(_ folder: RecentFolder) {
         quickJumpPanel.close()
+        handleNavigation(to: folder)
+    }
 
+    /// 将文件夹选择分发到正确的导航器：Finder 用 AppleScript，对话框用 Cmd+Shift+G
+    private func handleNavigation(to folder: RecentFolder) {
         let prevApp = previousFrontmostApp
         previousFrontmostApp = nil
 
@@ -263,23 +267,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Step 1：激活前一个 app
         app.activate(options: .activateAllWindows)
 
-        // Step 2：等 app 激活后，用 AX 找到对话框并显式聚焦
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            guard let self = self else { return }
+        let isFinder = app.bundleIdentifier == "com.apple.finder"
+
+        if isFinder {
+            // Finder 场景：直接通过 AppleScript 设置 Finder 窗口 target
+            FinderWindowNavigator.shared.navigateTo(folder.path)
+            return
+        }
+
+        // 非 Finder 场景（保存/打开对话框等）：用 AX + Cmd+Shift+G 导航
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.raiseDialogWindow(in: app)
 
-            // Step 3：聚焦后再等一段时间确保焦点稳定，再发键盘事件
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                guard DialogNavigator.checkPermission() else {
-                    DialogNavigator.requestPermission()
-                    self.showPermissionAlert(for: .appleEvents)
-                    return
-                }
-                let success = DialogNavigator.navigateTo(path: folder.path)
-                if !success {
-                    print("[QuickFolderJump] 导航失败: \(folder.path)")
-                }
+                self.navigateDialog(to: folder.path)
             }
+        }
+    }
+
+    /// 通过 DialogNavigator 执行 Cmd+Shift+G 导航序列
+    private func navigateDialog(to path: String) {
+        guard DialogNavigator.checkPermission() else {
+            DialogNavigator.requestPermission()
+            showPermissionAlert(for: .appleEvents)
+            return
+        }
+        let success = DialogNavigator.navigateTo(path: path)
+        if !success {
+            print("[QuickFolderJump] 导航失败: \(path)")
         }
     }
 
