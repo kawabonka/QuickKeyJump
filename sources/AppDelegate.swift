@@ -21,10 +21,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         folderManager.loadRecentFolders(maxResults: 5)
         LaunchManager.syncWithPreference()
         NotificationCenter.default.addObserver(
-            forName: .languageChanged, object: nil, queue: .main
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            self?.prefsMenuItem?.title = L("偏好设置...", "Preferences...")
-            self?.quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
+            self?.updateMenuTitles()
         }
         NotificationCenter.default.addObserver(
             forName: .triggerAction, object: nil, queue: .main
@@ -197,6 +196,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 菜单
 
+
+        private func updateMenuTitles() {
+        prefsMenuItem?.title = L("偏好设置...", "Preferences...")
+        quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
+    }
 
     @objc private func quitApplication() { NSApplication.shared.terminate(self) }
 
