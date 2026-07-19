@@ -49,14 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem?.button else { return }
 
-        if let icon = loadMenuBarIcon() {
-            icon.size = NSSize(width: 18, height: 18)
-            icon.isTemplate = false
-            button.image = icon
-        } else {
-            button.image = NSImage(systemSymbolName: "command.square.fill",
-                                    accessibilityDescription: "QuickKeyJump")
-        }
+        let cmdIcon = NSImage(systemSymbolName: "command", accessibilityDescription: "QuickKeyJump")
+        cmdIcon?.isTemplate = true
+        button.image = cmdIcon
 
         let menu = NSMenu(title: "QuickKeyJump")
 
@@ -99,20 +94,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
-    private func loadMenuBarIcon() -> NSImage? {
-        if let path = Bundle.main.path(forResource: "AppIcon", ofType: "icns") {
-            return NSImage(contentsOfFile: path)
-        }
-        let sourcesPath = Bundle.main.bundlePath + "/../../../sources/AppIcon.icns"
-        if FileManager.default.fileExists(atPath: sourcesPath) {
-            return NSImage(contentsOfFile: sourcesPath)
-        }
-        let cwdPath = FileManager.default.currentDirectoryPath + "/AppIcon.icns"
-        if FileManager.default.fileExists(atPath: cwdPath) {
-            return NSImage(contentsOfFile: cwdPath)
-        }
-        return nil
-    }
+
 
     // MARK: 全局热键管理
 
@@ -212,7 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .quickJump:      executeQuickJump()
         case .defaultBrowser: executeDefaultBrowser()
-        case .screenshot:     executeScreenshot()
+        case .windowManagement: executeWindowManagement()
         }
     }
 
@@ -300,14 +282,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: 截图
+    // MARK: 窗口管理
 
-    private func executeScreenshot() {
-        let process = Process()
-        process.launchPath = "/usr/sbin/screencapture"
-        process.arguments = ["-i", "-c", "-s"]
-        try? process.run()
-        process.waitUntilExit()
+    private var windowManagementPanel: WindowManagementPanel?
+
+    private func executeWindowManagement() {
+        if windowManagementPanel?.isVisible == true {
+            windowManagementPanel?.close()
+            windowManagementPanel = nil
+            return
+        }
+        let panel = WindowManagementPanel()
+        panel.onAction = { [weak self, weak panel] action in
+            panel?.close()
+            self?.windowManagementPanel = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                WindowManager.shared.execute(action)
+            }
+        }
+        panel.onCancel = { [weak self] in
+            self?.windowManagementPanel = nil
+        }
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        windowManagementPanel = panel
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: 设置窗口

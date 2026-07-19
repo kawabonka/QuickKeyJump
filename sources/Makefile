@@ -22,6 +22,8 @@ SOURCES := \
 	DialogNavigator.swift \
 	FinderWindowNavigator.swift \
 	LaunchManager.swift \
+	WindowManager.swift \
+	WindowManagementPanel.swift \
 	AppDelegate.swift
 
 FRAMEWORKS := \

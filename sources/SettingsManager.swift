@@ -6,13 +6,13 @@ import Carbon
 enum ActionType: String, CaseIterable {
     case quickJump = "quickJump"
     case defaultBrowser = "defaultBrowser"
-    case screenshot = "screenshot"
+    case windowManagement = "windowManagement"
 
     var displayName: String {
         switch self {
         case .quickJump: return "快速跳转"
         case .defaultBrowser: return "默认浏览器"
-        case .screenshot: return "截图"
+        case .windowManagement: return "窗口管理"
         }
     }
 
@@ -20,7 +20,7 @@ enum ActionType: String, CaseIterable {
         switch self {
         case .quickJump: return "弹出最近文件夹面板，快速跳转到目标目录"
         case .defaultBrowser: return "打开系统默认浏览器"
-        case .screenshot: return "区域截图（自由选择截取区域，保存至桌面）"
+        case .windowManagement: return "左半屏 / 右半屏 / 最大化 / 下一显示器"
         }
     }
 
@@ -28,7 +28,7 @@ enum ActionType: String, CaseIterable {
         switch self {
         case .quickJump: return "folder.fill"
         case .defaultBrowser: return "safari.fill"
-        case .screenshot: return "camera.viewfinder"
+        case .windowManagement: return "rectangle.3.group"
         }
     }
 
@@ -38,8 +38,8 @@ enum ActionType: String, CaseIterable {
             return Shortcut(keyCode: UInt16(kVK_ANSI_G), modifiers: UInt(optionKey | cmdKey))
         case .defaultBrowser:
             return Shortcut(keyCode: UInt16(kVK_ANSI_E), modifiers: UInt(cmdKey))
-        case .screenshot:
-            return Shortcut(keyCode: UInt16(kVK_ANSI_S), modifiers: UInt(optionKey | cmdKey))
+        case .windowManagement:
+            return Shortcut(keyCode: UInt16(kVK_ANSI_Z), modifiers: UInt(optionKey | cmdKey))
         }
     }
 
@@ -48,7 +48,7 @@ enum ActionType: String, CaseIterable {
         switch self {
         case .quickJump: return 1
         case .defaultBrowser: return 2
-        case .screenshot: return 3
+        case .windowManagement: return 3
         }
     }
 }
@@ -171,7 +171,7 @@ final class SettingsManager: ObservableObject {
         case UInt16(kVK_ANSI_W): return "W"
         case UInt16(kVK_ANSI_X): return "X"
         case UInt16(kVK_ANSI_Y): return "Y"
-        case UInt16(kVK_ANSI_Z): return "Z"
+        case UInt16(kVK_ANSI_S): return "Z"
         case UInt16(kVK_ANSI_0): return "0"
         case UInt16(kVK_ANSI_1): return "1"
         case UInt16(kVK_ANSI_2): return "2"
