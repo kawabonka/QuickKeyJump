@@ -7,6 +7,8 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
+    @State private var autoLaunch = LaunchManager.isEnabled
+
     var body: some View {
         VStack(spacing: 0) {
             headerView
@@ -48,24 +50,49 @@ struct SettingsView: View {
     }
 
     private var footerView: some View {
-        HStack {
-            Button(action: {
-                for a in ActionType.allCases { KeyboardShortcuts.reset(a.name) }
-            }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.counterclockwise").font(.system(size: 10))
-                    Text("恢复默认").font(.system(size: 11))
+        VStack(spacing: 8) {
+            HStack(spacing: 14) {
+                Button(action: {
+                    for a in ActionType.allCases { KeyboardShortcuts.reset(a.name) }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.counterclockwise").font(.system(size: 9))
+                        Text("恢复默认").font(.system(size: 11))
+                    }
                 }
+                .buttonStyle(.plain).foregroundColor(.secondary)
+
+                Spacer()
+
+                Toggle(isOn: $autoLaunch) {
+                    Text("开机自启").font(.system(size: 11))
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .onChange(of: autoLaunch) { _, v in
+                    v ? LaunchManager.enable() : LaunchManager.disable()
+                }
+
+                Button(action: {
+                    NSWorkspace.shared.open(
+                        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                    )
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "hand.raised.fill").font(.system(size: 9))
+                        Text("辅助功能权限…").font(.system(size: 11))
+                    }
+                }
+                .buttonStyle(.plain).foregroundColor(.secondary)
             }
-            .buttonStyle(.plain).foregroundColor(.secondary)
-            Spacer()
-            Text("v\(appVersion)").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.6))
+            HStack {
+                Spacer()
+                Text("v\(appVersion)").font(.system(size: 9)).foregroundColor(.secondary.opacity(0.5))
+            }
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
     }
 }
-
-// MARK: - Shortcut Row
 
 private struct ShortcutRowView: View {
     let action: ActionType
@@ -89,8 +116,6 @@ private struct ShortcutRowView: View {
     }
 }
 
-// MARK: - NSViewRepresentable wrapper for RecorderCocoa
-
 private struct RecorderView: NSViewRepresentable {
     let name: KeyboardShortcuts.Name
 
@@ -100,8 +125,6 @@ private struct RecorderView: NSViewRepresentable {
 
     func updateNSView(_ v: RecorderCocoa, context: Context) {}
 }
-
-// MARK: - NSVisualEffectView wrapper
 
 private struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
