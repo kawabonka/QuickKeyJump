@@ -9,6 +9,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hasShownPermissionAlert = false
     private var previousFrontmostApp: NSRunningApplication?
     private var settingsWindow: NSWindow?
+    private var prefsMenuItem: NSMenuItem?
+    private var quitMenuItem: NSMenuItem?
 
     // MARK: 生命周期
 
@@ -18,6 +20,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerAllShortcuts()
         folderManager.loadRecentFolders(maxResults: 5)
         LaunchManager.syncWithPreference()
+        NotificationCenter.default.addObserver(
+            forName: .languageChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.prefsMenuItem?.title = L("偏好设置...", "Preferences...")
+            self?.quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
+        }
         NotificationCenter.default.addObserver(
             forName: .triggerAction, object: nil, queue: .main
         ) { [weak self] n in
@@ -59,13 +67,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu(title: "QuickKeyJump")
         let prefsItem = NSMenuItem(title: L("偏好设置...", "Preferences..."), action: #selector(openSettingsMenuAction), keyEquivalent: ",")
-        prefsItem.target = self; menu.addItem(prefsItem)
-        menu.addItem(NSMenuItem.separator())
-
-        let autoItem = NSMenuItem(title: L("开机自动启动", "Launch at Login"), action: #selector(toggleAutoStart), keyEquivalent: "")
-        autoItem.target = self
-        autoItem.state = LaunchManager.isEnabled ? .on : .off
-        menu.addItem(autoItem)
+        prefsItem.target = self; menu.addItem(prefsItem); prefsMenuItem = prefsItem
         menu.addItem(NSMenuItem.separator())
 
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -73,7 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: L("退出 QuickKeyJump", "Quit QuickKeyJump"), action: #selector(quitApplication), keyEquivalent: "q")
-        quitItem.target = self; menu.addItem(quitItem)
+        quitItem.target = self; menu.addItem(quitItem); quitMenuItem = quitItem
         statusItem?.menu = menu
     }
 
@@ -195,10 +197,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: 菜单
 
-    @objc private func toggleAutoStart(_ sender: NSMenuItem) {
-        if LaunchManager.isEnabled { LaunchManager.disable(); sender.state = .off }
-        else { LaunchManager.enable(); sender.state = .on }
-    }
 
     @objc private func quitApplication() { NSApplication.shared.terminate(self) }
 

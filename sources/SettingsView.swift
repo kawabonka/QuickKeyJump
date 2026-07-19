@@ -47,6 +47,7 @@ struct SettingsView: View {
         .frame(width: 120)
         .onChange(of: language) { _, v in
             AppLanguage.current = AppLanguage(rawValue: v) ?? .zh
+            NotificationCenter.default.post(name: .languageChanged, object: nil)
         }
     }
 
