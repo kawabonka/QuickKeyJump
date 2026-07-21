@@ -11,6 +11,18 @@
 
 ---
 
+## Why QuickKeyJump?
+
+On Windows, [Listary](https://www.listary.com/) is a godsend. Press `Ctrl+G` anywhere—even inside a Save dialog—and a floating panel shows your most recent folders. Tap a number key. Done. It becomes muscle memory within a day.
+
+Then you switch to macOS.
+
+There's nothing like it. Alfred's File Navigation requires extra steps. Raycast Quicklinks need manual setup. Default Folder X costs $40 and buries the one feature you need under a dozen you don't.
+
+So I built QuickKeyJump. It started as a faithful Listary clone for macOS. Then it grew—because once you have a global hotkey engine, why stop at folder jumping? Window management, file manager, all at your fingertips.
+
+---
+
 ## Features
 
 | Action | Default | Description |
