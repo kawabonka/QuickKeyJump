@@ -11,6 +11,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var prefsMenuItem: NSMenuItem?
     private var quitMenuItem: NSMenuItem?
+    private var preventSleepItem: NSMenuItem?
+    private var caffeinateProcess: Process?
 
     // MARK: 生命周期
 
@@ -67,6 +69,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu(title: "QuickKeyJump")
         let prefsItem = NSMenuItem(title: L("偏好设置...", "Preferences..."), action: #selector(openSettingsMenuAction), keyEquivalent: ",")
         prefsItem.target = self; menu.addItem(prefsItem); prefsMenuItem = prefsItem
+        menu.addItem(NSMenuItem.separator())
+
+        let sleepItem = NSMenuItem(title: L("防止锁屏", "Prevent Sleep"), action: #selector(togglePreventSleep), keyEquivalent: "")
+        sleepItem.target = self
+        sleepItem.state = caffeinateProcess != nil ? .on : .off
+        menu.addItem(sleepItem)
+        preventSleepItem = sleepItem
+
         menu.addItem(NSMenuItem.separator())
 
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -199,10 +209,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         private func updateMenuTitles() {
         prefsMenuItem?.title = L("偏好设置...", "Preferences...")
+        preventSleepItem?.title = L("防止锁屏", "Prevent Sleep")
         quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
     }
 
-    @objc private func quitApplication() { NSApplication.shared.terminate(self) }
+        @objc private func togglePreventSleep(_ sender: NSMenuItem) {
+        if caffeinateProcess != nil {
+            caffeinateProcess?.terminate()
+            caffeinateProcess = nil
+            sender.state = .off
+        } else {
+            let p = Process()
+            p.launchPath = "/usr/bin/caffeinate"
+            p.arguments = ["-d", "-i"]
+            try? p.run()
+            caffeinateProcess = p
+            sender.state = .on
+        }
+    }
+
+    @objc private func quitApplication() {
+        caffeinateProcess?.terminate()
+        NSApplication.shared.terminate(self)
+    }
 
     // MARK: 权限
 
