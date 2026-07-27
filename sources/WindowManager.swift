@@ -24,6 +24,8 @@ final class WindowManager {
 
     private init() {}
 
+    // MARK: Execute
+
     func execute(_ action: WindowAction) {
         guard let frontApp = NSWorkspace.shared.frontmostApplication else {
             print("[QKJ] WM: no frontmost application"); return
@@ -31,14 +33,15 @@ final class WindowManager {
         guard let win = findWindow(for: frontApp) else {
             print("[QKJ] WM: no window for \(frontApp.localizedName ?? "?")"); return
         }
-        guard let currentFrame = getFrame(win),
-              let currentScreen = screenContaining(currentFrame) else {
+        // getFrame 返回 CG 坐标（AX 原生），转为 AppKit 用于内部计算
+        guard let cgFrame = getFrame(win),
+              let axFrame = cgToAppKit(cgFrame),
+              let currentScreen = screenContaining(axFrame) else {
             print("[QKJ] WM: cannot get frame/screen"); return
         }
 
-        // 确定目标屏幕和 frame
         let targetScreen: NSScreen
-        let newFrame: CGRect
+        let targetFrameAppKit: CGRect
 
         switch action {
         case .nextDisplay:
@@ -46,23 +49,42 @@ final class WindowManager {
             guard screens.count > 1 else { return }
             let idx = screens.firstIndex(of: currentScreen) ?? 0
             targetScreen = screens[(idx + 1) % screens.count]
-            newFrame = maximizeRect(in: targetScreen.visibleFrame)
+            targetFrameAppKit = maximizeRect(in: targetScreen.visibleFrame)
         default:
             targetScreen = currentScreen
             let vf = targetScreen.visibleFrame
             switch action {
-            case .leftHalf:       newFrame = leftHalfRect(in: vf)
-            case .rightHalf:      newFrame = rightHalfRect(in: vf)
-            case .maximize:       newFrame = maximizeRect(in: vf)
-            case .almostMaximize: newFrame = almostMaximizeRect(in: vf)
-            case .reasonableSize: newFrame = reasonableSizeRect(in: vf)
+            case .leftHalf:       targetFrameAppKit = leftHalfRect(in: vf)
+            case .rightHalf:      targetFrameAppKit = rightHalfRect(in: vf)
+            case .maximize:       targetFrameAppKit = maximizeRect(in: vf)
+            case .almostMaximize: targetFrameAppKit = almostMaximizeRect(in: vf)
+            case .reasonableSize: targetFrameAppKit = reasonableSizeRect(in: vf)
             default:              return
             }
         }
 
-        setFrame(win, newFrame)
-        // 关键修复：bestEffort 使用目标屏幕，不是原始屏幕
+        // AppKit → CG 坐标转换后设置
+        setFrame(win, appKitToCG(targetFrameAppKit))
         bestEffortAdjust(win, screen: targetScreen)
+    }
+
+    // MARK: 坐标转换（AppKit 原点左下 ↔ AX/CG 原点左上）
+
+    private func appKitToCG(_ r: CGRect) -> CGRect {
+        // NSScreen.screens 包含所有屏幕，找到包含该 frame 的屏幕来计算高度
+        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(r) }) ?? NSScreen.main else {
+            return r
+        }
+        let sh = screen.frame.height
+        return CGRect(x: r.origin.x, y: sh - r.origin.y - r.height, width: r.width, height: r.height)
+    }
+
+    private func cgToAppKit(_ r: CGRect) -> CGRect? {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(r) }) ?? NSScreen.main else {
+            return nil
+        }
+        let sh = screen.frame.height
+        return CGRect(x: r.origin.x, y: sh - r.origin.y - r.height, width: r.width, height: r.height)
     }
 
     // MARK: 三级窗口查找
@@ -80,7 +102,7 @@ final class WindowManager {
         return nil
     }
 
-    // MARK: 位置计算
+    // MARK: 位置计算（AppKit 坐标系）
 
     private func leftHalfRect(in vf: CGRect) -> CGRect {
         CGRect(x: vf.minX + gapSize, y: vf.minY + gapSize,
@@ -100,7 +122,7 @@ final class WindowManager {
         return CGRect(x: vf.minX + (vf.width - w) / 2, y: vf.minY + (vf.height - h) / 2, width: w, height: h)
     }
 
-    // MARK: AX Helpers
+    // MARK: AX Helpers（CG 坐标系）
 
     private func getFrame(_ window: AXUIElement) -> CGRect? {
         var pVal: AnyObject?, sVal: AnyObject?
@@ -120,20 +142,21 @@ final class WindowManager {
         AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sv)
     }
 
+    /// bestEffortAdjust 读取和写入均使用 CG 坐标，visibleFrame 需转为 CG 后比较
     private func bestEffortAdjust(_ window: AXUIElement, screen: NSScreen) {
-        guard var frame = getFrame(window) else { return }
-        let vf = screen.visibleFrame
+        guard var cgFrame = getFrame(window) else { return }
+        let vfAppKit = screen.visibleFrame
+        let vf = appKitToCG(CGRect(x: vfAppKit.minX, y: vfAppKit.minY,
+                                    width: vfAppKit.width, height: vfAppKit.height))
         var adjusted = false
-        if frame.minX < vf.minX { frame.origin.x = vf.minX; adjusted = true }
-        if frame.maxX > vf.maxX { frame.origin.x = vf.maxX - frame.width; adjusted = true }
-        if frame.origin.y < vf.minY { frame.origin.y = vf.minY; adjusted = true }
-        let axBottom = frame.origin.y + frame.height
-        if axBottom > vf.origin.y + vf.size.height {
-            frame.origin.y = vf.origin.y + vf.size.height - frame.size.height; adjusted = true
-        }
-        if adjusted { setFrame(window, frame) }
+        if cgFrame.minX < vf.minX { cgFrame.origin.x = vf.minX; adjusted = true }
+        if cgFrame.maxX > vf.maxX { cgFrame.origin.x = vf.maxX - cgFrame.width; adjusted = true }
+        if cgFrame.minY < vf.minY { cgFrame.origin.y = vf.minY; adjusted = true }
+        if cgFrame.maxY > vf.maxY { cgFrame.origin.y = vf.maxY - cgFrame.height; adjusted = true }
+        if adjusted { setFrame(window, cgFrame) }
     }
 
+    /// screenContaining 接受 AppKit 坐标
     private func screenContaining(_ frame: CGRect) -> NSScreen? {
         NSScreen.screens.first { $0.frame.intersects(frame) } ?? NSScreen.main
     }
