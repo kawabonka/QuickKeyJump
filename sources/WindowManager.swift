@@ -49,7 +49,7 @@ final class WindowManager {
             guard screens.count > 1 else { return }
             let idx = screens.firstIndex(of: currentScreen) ?? 0
             targetScreen = screens[(idx + 1) % screens.count]
-            targetFrameAppKit = maximizeRect(in: targetScreen.visibleFrame)
+            targetFrameAppKit = maintainSizeRect(in: targetScreen.visibleFrame, current: axFrame)
         default:
             targetScreen = currentScreen
             let vf = targetScreen.visibleFrame
