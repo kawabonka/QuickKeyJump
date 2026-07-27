@@ -113,6 +113,12 @@ final class WindowManager {
                width: vf.width / 2 - gapSize * 1.5, height: vf.height - gapSize * 2)
     }
     private func maximizeRect(in vf: CGRect) -> CGRect { vf }
+
+    private func maintainSizeRect(in vf: CGRect, current: CGRect) -> CGRect {
+        let cx = vf.minX + (vf.width - current.width) / 2
+        let cy = vf.minY + (vf.height - current.height) / 2
+        return CGRect(x: cx, y: cy, width: current.width, height: current.height)
+    }
     private func almostMaximizeRect(in vf: CGRect) -> CGRect {
         let w = vf.width * 0.9, h = vf.height * 0.9
         return CGRect(x: vf.minX + (vf.width - w) / 2, y: vf.minY + (vf.height - h) / 2, width: w, height: h)
