@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var quitMenuItem: NSMenuItem?
     private var preventSleepItem: NSMenuItem?
     private var caffeinateProcess: Process?
+    private var cleanMemoryItem: NSMenuItem?
 
     // MARK: 生命周期
 
@@ -76,6 +77,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         sleepItem.state = caffeinateProcess != nil ? .on : .off
         menu.addItem(sleepItem)
         preventSleepItem = sleepItem
+
+        let cleanItem = NSMenuItem(title: L("清理内存", "Clean Memory"), action: #selector(cleanMemory), keyEquivalent: "")
+        cleanItem.target = self
+        menu.addItem(cleanItem)
+        cleanMemoryItem = cleanItem
 
         menu.addItem(NSMenuItem.separator())
 
@@ -210,6 +216,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         private func updateMenuTitles() {
         prefsMenuItem?.title = L("偏好设置...", "Preferences...")
         preventSleepItem?.title = L("防止锁屏", "Prevent Sleep")
+        cleanMemoryItem?.title = L("清理内存", "Clean Memory")
         quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
     }
 
@@ -226,6 +233,92 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             caffeinateProcess = p
             sender.state = .on
         }
+    }
+
+    @objc private func cleanMemory() {
+        // Step 1: 采集清理前数据
+        let beforeMem = runCmd("/usr/bin/vm_stat")
+        let beforeDisk = runCmd("/bin/df", ["-h", "/"])
+        let beforeCache = runCmd("/usr/bin/du", ["-sh", NSHomeDirectory() + "/Library/Caches"])
+
+        // Step 2: 清理用户缓存
+        cleanUserCaches()
+
+        // Step 3: sudo purge（弹出系统密码框）
+        let task = Process()
+        task.launchPath = "/usr/bin/osascript"
+        task.arguments = ["-e", "do shell script \"purge\" with administrator privileges"]
+        try? task.run()
+        task.waitUntilExit()
+
+        // Step 4: 采集清理后数据
+        let afterMem = runCmd("/usr/bin/vm_stat")
+        let afterDisk = runCmd("/bin/df", ["-h", "/"])
+        let afterCache = runCmd("/usr/bin/du", ["-sh", NSHomeDirectory() + "/Library/Caches"])
+
+        // Step 5: 展示结果
+        let memBefore = extractMemFree(beforeMem)
+        let memAfter = extractMemFree(afterMem)
+        let diskBefore = extractDiskAvail(beforeDisk)
+        let diskAfter = extractDiskAvail(afterDisk)
+        let cacheBefore = extractSize(beforeCache)
+        let cacheAfter = extractSize(afterCache)
+
+        let msg = L(
+            "清理前\n内存可用: \(memBefore)\n磁盘可用: \(diskBefore)\n缓存大小: \(cacheBefore)\n\n清理后\n内存可用: \(memAfter)\n磁盘可用: \(diskAfter)\n缓存大小: \(cacheAfter)",
+            "Before\nMemory free: \(memBefore)\nDisk free: \(diskBefore)\nCache size: \(cacheBefore)\n\nAfter\nMemory free: \(memAfter)\nDisk free: \(diskAfter)\nCache size: \(cacheAfter)"
+        )
+        let alert = NSAlert()
+        alert.messageText = L("清理完成", "Clean Complete")
+        alert.informativeText = msg
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func runCmd(_ path: String, _ args: [String] = []) -> String {
+        let p = Process(); p.launchPath = path; p.arguments = args
+        let pipe = Pipe(); p.standardOutput = pipe
+        try? p.run(); p.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func cleanUserCaches() {
+        let fm = FileManager.default
+        let cacheDir = NSHomeDirectory() + "/Library/Caches"
+        guard let items = try? fm.contentsOfDirectory(atPath: cacheDir) else { return }
+        let skip = ["com.apple.", "CloudKit"]
+        for item in items {
+            if skip.contains(where: { item.hasPrefix($0) }) { continue }
+            try? fm.removeItem(atPath: cacheDir + "/" + item)
+        }
+    }
+
+    private func extractMemFree(_ vmStat: String) -> String {
+        let lines = vmStat.components(separatedBy: "\n")
+        var free = 0, pageSize = 16384
+        for line in lines {
+            if line.contains("page size of") {
+                if let n = Int(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) { pageSize = n }
+            }
+            if line.contains("Pages free") || line.contains("pages free") {
+                if let n = Int(line.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()) { free = n }
+            }
+        }
+        let mb = free * pageSize / 1048576
+        return mb > 1024 ? "\(mb / 1024) GB" : "\(mb) MB"
+    }
+
+    private func extractDiskAvail(_ df: String) -> String {
+        let lines = df.components(separatedBy: "\n")
+        guard lines.count >= 2 else { return "?" }
+        let parts = lines[1].components(separatedBy: CharacterSet.whitespaces).filter { !$0.isEmpty }
+        return parts.count >= 4 ? parts[3] : "?"
+    }
+
+    private func extractSize(_ du: String) -> String {
+        let parts = du.components(separatedBy: "\t")
+        return parts.first ?? "0B"
     }
 
     @objc private func quitApplication() {
