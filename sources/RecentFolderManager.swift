@@ -89,30 +89,63 @@ final class RecentFolderManager: ObservableObject {
     ///
     /// - Parameter maxResults: 最多返回几条记录，默认为5（对应快捷键1-5）
     func loadRecentFolders(maxResults: Int = 5) {
+        var combined: [RecentFolder] = []
+
+        // 1. Finder 最近文件夹 (FXRecentFolders)
         do {
-            // 1. 读取PLIST文件
             let plistData = try readFinderPlist()
-            
-            // 2. 提取FXRecentFolders数组
-            let recentFoldersArray = try extractRecentFoldersArray(from: plistData)
-            
-            // 3. 解析每个条目为RecentFolder
-            let parsedFolders = try parseRecentFolders(
-                from: recentFoldersArray,
-                maxResults: maxResults
-            )
-            
-            // 4. 更新发布属性（主线程）
-            DispatchQueue.main.async { [weak self] in
-                self?.folders = parsedFolders
-            }
-            
+            let arr = try extractRecentFoldersArray(from: plistData)
+            combined = try parseRecentFolders(from: arr, maxResults: maxResults)
         } catch {
-            print("\(logPrefix) 加载最近文件夹失败: \(error.localizedDescription)")
-            DispatchQueue.main.async { [weak self] in
-                self?.folders = []
+            print("\(logPrefix) Finder 最近文件夹加载失败: \(error.localizedDescription)")
+        }
+
+        // 2. Downloads 目录总是加入
+        let downloadsPath = expandTilde(in: "~/Downloads")
+        if validateDirectory(at: downloadsPath),
+           !combined.contains(where: { $0.path == downloadsPath }) {
+            combined.insert(RecentFolder(name: "Downloads", path: downloadsPath, shortcut: ""), at: 0)
+        }
+
+        // 3. 最近 7 天内活跃的 Downloads 子目录
+        let dlSubs = recentDownloadSubfolders()
+        for sub in dlSubs {
+            if !combined.contains(where: { $0.path == sub.path }) {
+                combined.append(sub)
             }
         }
+
+        // 4. 合并去重后截取 maxResults 条，重新编号
+        let result = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
+            RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.folders = result
+        }
+    }
+
+    /// 扫描 ~/Downloads 下最近 7 天修改过的子目录
+    private func recentDownloadSubfolders() -> [RecentFolder] {
+        let dlPath = expandTilde(in: "~/Downloads")
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(atPath: dlPath) else { return [] }
+        let cutoff = Date().addingTimeInterval(-7 * 86400)
+        var results: [RecentFolder] = []
+        for item in items {
+            let full = dlPath + "/" + item
+            guard let attrs = try? fm.attributesOfItem(atPath: full),
+                  let modDate = attrs[.modificationDate] as? Date,
+                  modDate > cutoff,
+                  validateDirectory(at: full) else { continue }
+            results.append(RecentFolder(name: item, path: full, shortcut: ""))
+        }
+        results.sort { a, b in
+            let ma = (try? fm.attributesOfItem(atPath: a.path))?[.modificationDate] as? Date ?? .distantPast
+            let mb = (try? fm.attributesOfItem(atPath: b.path))?[.modificationDate] as? Date ?? .distantPast
+            return ma > mb
+        }
+        return results
     }
     
     /// 根据索引获取目录
