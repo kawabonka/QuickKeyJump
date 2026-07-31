@@ -22,8 +22,11 @@ struct QuickJumpView: View {
 
     // MARK: - 状态
 
-    /// 当前选中项的索引（0-4）
+    /// 当前选中项的索引（0-9）
     @State private var selectedIndex: Int = 0
+
+    /// 视口内首行索引（用于上下选择滚动）
+    @State private var scrollOffset: Int = 0
 
     // MARK: - 常量
 
@@ -41,6 +44,10 @@ struct QuickJumpView: View {
         static let cornerRadius: CGFloat = 12
         /// 快捷键标签尺寸
         static let shortcutSize: CGFloat = 22
+        /// 视口内同时显示的行数（屏幕上的 1-5 对应数字键）
+        static let visibleRowCount: Int = 5
+        /// 最多收集的候选数量
+        static let maxItems: Int = 10
     }
 
     // MARK: - Body
@@ -82,6 +89,16 @@ struct QuickJumpView: View {
         .onReceive(NotificationCenter.default.publisher(for: .quickJumpOpenFinder)) { _ in
             openCurrentInFinder()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .quickJumpSelectIndex)) { notification in
+            if let index = notification.userInfo?["index"] as? Int {
+                selectVisibleIndex(index)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .quickJumpOpenIndex)) { notification in
+            if let index = notification.userInfo?["index"] as? Int {
+                openVisibleIndexInFinder(index)
+            }
+        }
     }
 
     // MARK: - 子视图
@@ -102,12 +119,15 @@ struct QuickJumpView: View {
     /// 文件夹列表视图
     private var folderListView: some View {
         VStack(spacing: Layout.rowSpacing) {
-            // 只显示前 5 个项目
-            ForEach(Array(folderManager.folders.prefix(5).enumerated()), id: \.element.id) { index, folder in
+            // 数据最多 10 项；视口内最多显示 5 行，上下选择时滚动
+            let start = scrollOffset
+            let end = min(folderManager.folders.count, scrollOffset + Layout.visibleRowCount)
+            ForEach(start..<end, id: \.self) { index in
+                let folder = folderManager.folders[index]
                 FolderRowView(
                     folder: folder,
                     isSelected: index == selectedIndex,
-                    shortcut: folder.shortcut
+                    shortcut: String(index - scrollOffset + 1) // 屏幕位置 1-5
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -125,6 +145,11 @@ struct QuickJumpView: View {
         HStack(spacing: 2) {
             separatorDot
             Text("1-5 跳转")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+
+            separatorDot
+            Text("↑↓ 滚动")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
 
@@ -167,6 +192,7 @@ struct QuickJumpView: View {
         let count = folderManager.folders.count
         guard count > 0 else { return }
         selectedIndex = (selectedIndex - 1 + count) % count
+        clampScrollToSelection()
     }
 
     /// 向下移动选择（循环到开头）
@@ -174,6 +200,7 @@ struct QuickJumpView: View {
         let count = folderManager.folders.count
         guard count > 0 else { return }
         selectedIndex = (selectedIndex + 1) % count
+        clampScrollToSelection()
     }
 
     /// 选择指定索引并立即确认跳转
@@ -182,6 +209,21 @@ struct QuickJumpView: View {
         guard index >= 0, index < count else { return }
         selectedIndex = index
         confirmSelection()
+    }
+
+    /// 数字键 1-5：选择视口内对应屏幕位置的项目（0-4）并立即跳转
+    func selectVisibleIndex(_ visibleIndex: Int) {
+        selectAndConfirm(index: scrollOffset + visibleIndex)
+    }
+
+    /// Cmd+数字键 1-5：在访达中打开视口内对应屏幕位置的项目
+    func openVisibleIndexInFinder(_ visibleIndex: Int) {
+        let index = scrollOffset + visibleIndex
+        let count = folderManager.folders.count
+        guard index >= 0, index < count else { return }
+        let folder = folderManager.folders[index]
+        NSWorkspace.shared.open(URL(fileURLWithPath: folder.path))
+        onCancel()
     }
 
     /// 确认当前选择项，触发跳转回调
@@ -223,9 +265,27 @@ struct QuickJumpView: View {
         let count = folderManager.folders.count
         if count == 0 {
             selectedIndex = 0
+            scrollOffset = 0
         } else if selectedIndex >= count {
             selectedIndex = count - 1
         }
+        clampScrollToSelection()
+    }
+
+    /// 滚动视口，确保当前选中项始终可见
+    private func clampScrollToSelection() {
+        let count = folderManager.folders.count
+        guard count > Layout.visibleRowCount else {
+            scrollOffset = 0
+            return
+        }
+        let maxOffset = count - Layout.visibleRowCount
+        if selectedIndex < scrollOffset {
+            scrollOffset = selectedIndex
+        } else if selectedIndex >= scrollOffset + Layout.visibleRowCount {
+            scrollOffset = selectedIndex - Layout.visibleRowCount + 1
+        }
+        scrollOffset = min(max(scrollOffset, 0), maxOffset)
     }
 }
 

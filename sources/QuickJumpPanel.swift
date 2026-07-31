@@ -139,6 +139,9 @@ final class QuickJumpPanel: NSObject {
         // 清理回调
         onSelectCallback = nil
         onCancelCallback = nil
+
+        // 通知外部（如设置窗口）重新置前
+        NotificationCenter.default.post(name: .quickJumpPanelClosed, object: nil)
     }
 
     // MARK: - 窗口创建与配置
@@ -271,21 +274,22 @@ final class QuickJumpPanel: NSObject {
 
     /// 配置键盘事件处理器
     private func setupKeyboardHandler() {
-        // 数字键 1-5：直接从文件夹管理器中取出对应索引的文件夹并确认跳转
-        keyboardHandler.onSelectIndex = { [weak self] index in
-            guard let self = self else { return }
-            guard let folders = self.folderManager?.folders,
-                  index < folders.count else { return }
-            let folder = folders[index]
-            self.handleSelect(folder: folder)
+        // 数字键 1-5：转发给 SwiftUI 视图（按屏幕位置映射到滚动后的绝对索引）
+        keyboardHandler.onSelectIndex = { index in
+            NotificationCenter.default.post(
+                name: .quickJumpSelectIndex,
+                object: nil,
+                userInfo: ["index": index]
+            )
         }
 
-        // Cmd+数字键 1-5：在访达中打开对应索引的文件夹
-        keyboardHandler.onCmdSelectIndex = { [weak self] index in
-            guard let self = self else { return }
-            guard let folders = self.folderManager?.folders,
-                  index < folders.count else { return }
-            self.openInFinder(folders[index])
+        // Cmd+数字键 1-5：在访达中打开屏幕位置对应的文件夹
+        keyboardHandler.onCmdSelectIndex = { index in
+            NotificationCenter.default.post(
+                name: .quickJumpOpenIndex,
+                object: nil,
+                userInfo: ["index": index]
+            )
         }
 
         // 上下箭头：通过 NotificationCenter 通知 SwiftUI 视图更新选中状态
@@ -485,4 +489,13 @@ extension Notification.Name {
 
     /// 在访达中打开当前选中项通知
     static let quickJumpOpenFinder = Notification.Name("quickJumpOpenFinder")
+
+    /// 数字键 1-5 选择屏幕位置（userInfo index: 0-4）
+    static let quickJumpSelectIndex = Notification.Name("quickJumpSelectIndex")
+
+    /// Cmd+数字键 1-5 在访达中打开屏幕位置（userInfo index: 0-4）
+    static let quickJumpOpenIndex = Notification.Name("quickJumpOpenIndex")
+
+    /// 跳转面板已关闭通知（用于设置窗口重新置前）
+    static let quickJumpPanelClosed = Notification.Name("quickJumpPanelClosed")
 }

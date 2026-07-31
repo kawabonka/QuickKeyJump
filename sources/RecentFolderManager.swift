@@ -98,8 +98,8 @@ final class RecentFolderManager: ObservableObject {
     /// 从 `~/Library/Preferences/com.apple.finder.plist` 读取 `FXRecentFolders`，
     /// 解析其中的目录条目，过滤掉不存在的目录，结果存入 `folders` 属性。
     ///
-    /// - Parameter maxResults: 最多返回几条记录，默认为5（对应快捷键1-5）
-    func loadRecentFolders(maxResults: Int = 5) {
+    /// - Parameter maxResults: 最多返回几条记录，默认为10（视口显示5条，可上下滚动）
+    func loadRecentFolders(maxResults: Int = 10) {
         var combined: [RecentFolder] = []
 
         // 1. Finder 最近文件夹 (FXRecentFolders)

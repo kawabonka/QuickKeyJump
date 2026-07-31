@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupStatusBarItem()
         registerAllShortcuts()
-        folderManager.loadRecentFolders(maxResults: 5)
+        folderManager.loadRecentFolders(maxResults: 10)
         LaunchManager.syncWithPreference()
         NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
@@ -33,6 +33,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] n in
             guard let action = n.userInfo?["action"] as? ActionType else { return }
             self?.executeAction(action)
+        }
+        // 跳转面板关闭后，若设置窗口仍打开，则重新置前（避免面板的激活策略切换把设置窗口挤到后面）
+        NotificationCenter.default.addObserver(
+            forName: .quickJumpPanelClosed, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.refrontSettingsIfNeeded()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkAccessibilityPermission()
@@ -113,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func executeQuickJump() {
         if quickJumpPanel.isVisible { quickJumpPanel.close(); return }
         previousFrontmostApp = NSWorkspace.shared.frontmostApplication
-        folderManager.loadRecentFolders(maxResults: 5)
+        folderManager.loadRecentFolders(maxResults: 10)
         quickJumpPanel.show(
             folderManager: folderManager,
             onSelect: { [weak self] f in self?.quickJumpPanel.close(); self?.handleNavigation(to: f) },
@@ -189,7 +195,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettingsMenuAction() { openSettings() }
 
     func openSettings() {
-        if let w = settingsWindow { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        if let w = settingsWindow {
+            w.makeKeyAndOrderFront(nil)
+            w.orderFrontRegardless()
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         let sv = SettingsView()
         let hv = NSHostingView(rootView: sv)
         hv.frame = NSRect(x: 0, y: 0, width: 480, height: 560)
@@ -203,10 +214,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         w.contentView = hv
         w.center()
         w.makeKeyAndOrderFront(nil)
+        w.orderFrontRegardless()
         settingsWindow = w
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [weak self] _ in
             self?.settingsWindow = nil
         }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// 跳转面板关闭后，若设置窗口仍打开，则将其重新置前
+    private func refrontSettingsIfNeeded() {
+        guard let w = settingsWindow, w.isVisible else { return }
+        w.makeKeyAndOrderFront(nil)
+        w.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
