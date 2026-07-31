@@ -8,12 +8,12 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
     @State private var autoLaunch = LaunchManager.isEnabled
+    @ObservedObject private var ignoreList = IgnoreListManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             headerView
-            shortcutListView
-            Divider().padding(.horizontal, 16)
+            settingsListView
             footerView
         }
         .frame(width: 480)
@@ -51,7 +51,7 @@ struct SettingsView: View {
         }
     }
 
-    private var shortcutListView: some View {
+    private var settingsListView: some View {
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(ActionType.allCases, id: \.rawValue) { action in
@@ -61,8 +61,77 @@ struct SettingsView: View {
                         Divider().padding(.leading, 60).padding(.trailing, 16)
                     }
                 }
+                Divider().padding(.vertical, 6)
+                ignoreListView
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    /// 忽视清单栏目：清单内的目录及其子目录不出现在快速跳转候选里
+    private var ignoreListView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("忽视清单", "Ignore List"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(L("清单内的目录及其子目录不会出现在快速跳转候选中", "Folders in this list and their subfolders are excluded from Quick Jump"))
+                        .font(.system(size: 11)).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(action: pickFolderToIgnore) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus.circle.fill").font(.system(size: 10))
+                        Text(L("添加目录…", "Add Folder…")).font(.system(size: 11))
+                    }
+                }
+                .buttonStyle(.plain).foregroundColor(.accentColor)
+            }
+            .padding(.horizontal, 20)
+
+            if ignoreList.paths.isEmpty {
+                Text(L("暂无忽视目录", "No ignored folders"))
+                    .font(.system(size: 11)).foregroundColor(.secondary.opacity(0.7))
+                    .padding(.horizontal, 20).padding(.vertical, 4)
+            } else {
+                ForEach(Array(ignoreList.paths.enumerated()), id: \.element) { index, path in
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder.badge.minus")
+                            .font(.system(size: 11)).foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(URL(fileURLWithPath: path).lastPathComponent)
+                                .font(.system(size: 12)).lineLimit(1)
+                            Text(path)
+                                .font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        Button(action: { ignoreList.remove(at: index) }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12)).foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(L("移除", "Remove"))
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 4)
+                    if index != ignoreList.paths.count - 1 {
+                        Divider().padding(.leading, 20).padding(.trailing, 20)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    /// 弹出目录选择面板，选择要加入忽视清单的目录
+    private func pickFolderToIgnore() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = L("选择要忽视的目录（含其子目录）", "Choose a folder to ignore (including its subfolders)")
+        panel.prompt = L("添加", "Add")
+        if panel.runModal() == .OK, let url = panel.url {
+            ignoreList.add(url.path)
         }
     }
 

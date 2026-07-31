@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 // MARK: - 数据模型
 
@@ -76,9 +77,18 @@ final class RecentFolderManager: ObservableObject {
     
     // MARK: 初始化
     
+    private var cancellables: Set<AnyCancellable> = []
+
     init() {
         // 初始化时自动加载
         loadRecentFolders()
+
+        // 忽视清单变化时自动刷新跳转列表
+        IgnoreListManager.shared.$paths
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.loadRecentFolders() }
+            .store(in: &cancellables)
     }
     
     // MARK: 公开接口
@@ -120,6 +130,9 @@ final class RecentFolderManager: ObservableObject {
         // 4. 全局按最近使用时间倒序（最新在最上面）
         combined.sort { $0.modDate > $1.modDate }
 
+        // 4.1 过滤忽视清单（清单内目录及其子目录不纳入候选）
+        combined = combined.filter { !IgnoreListManager.shared.isIgnored($0.path) }
+
         // 5. 先展示快速结果
         let fast = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
             RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
@@ -135,6 +148,7 @@ final class RecentFolderManager: ObservableObject {
                 manager.appendUnique(&merged, f)
             }
             merged.sort { $0.modDate > $1.modDate }
+            merged = merged.filter { !IgnoreListManager.shared.isIgnored($0.path) }
             let result = Array(merged.prefix(maxResults)).enumerated().map { (i, f) in
                 RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
             }
