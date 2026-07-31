@@ -100,50 +100,86 @@ final class RecentFolderManager: ObservableObject {
             print("\(logPrefix) Finder 最近文件夹加载失败: \(error.localizedDescription)")
         }
 
-        // 2. Downloads 目录总是加入
+        // 2. Downloads 目录
         let downloadsPath = expandTilde(in: "~/Downloads")
         if validateDirectory(at: downloadsPath),
            !combined.contains(where: { $0.path == downloadsPath }) {
             combined.insert(RecentFolder(name: "Downloads", path: downloadsPath, shortcut: ""), at: 0)
         }
 
-        // 3. 最近 7 天内活跃的 Downloads 子目录
-        let dlSubs = recentDownloadSubfolders()
+        // 3. Downloads / Desktop / Documents 最近活跃子目录
+        let dlSubs = recentSubfolders(in: ["~/Downloads", "~/Desktop", "~/Documents"])
         for sub in dlSubs {
             if !combined.contains(where: { $0.path == sub.path }) {
                 combined.append(sub)
             }
         }
 
-        // 4. 合并去重后截取 maxResults 条，重新编号
-        let result = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
+        // 4. 先展示快速结果
+        let fast = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
             RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
         }
+        DispatchQueue.main.async { [weak self] in self?.folders = fast }
 
-        DispatchQueue.main.async { [weak self] in
-            self?.folders = result
+        // 5. 异步 Spotlight 搜索最近 7 天修改过的目录（涵盖粘贴/下载/保存路径）
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let spotlight = self?.recentFoldersFromSpotlight() ?? []
+            var merged = combined
+            for f in spotlight {
+                if !merged.contains(where: { $0.path == f.path }) { merged.append(f) }
+            }
+            let result = Array(merged.prefix(maxResults)).enumerated().map { (i, f) in
+                RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
+            }
+            DispatchQueue.main.async { self?.folders = result }
         }
     }
 
-    /// 扫描 ~/Downloads 下最近 7 天修改过的子目录
-    private func recentDownloadSubfolders() -> [RecentFolder] {
-        let dlPath = expandTilde(in: "~/Downloads")
+    /// 扫描指定目录下最近 7 天修改过的子目录
+    private func recentSubfolders(in roots: [String]) -> [RecentFolder] {
         let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(atPath: dlPath) else { return [] }
         let cutoff = Date().addingTimeInterval(-7 * 86400)
         var results: [RecentFolder] = []
-        for item in items {
-            let full = dlPath + "/" + item
-            guard let attrs = try? fm.attributesOfItem(atPath: full),
-                  let modDate = attrs[.modificationDate] as? Date,
-                  modDate > cutoff,
-                  validateDirectory(at: full) else { continue }
-            results.append(RecentFolder(name: item, path: full, shortcut: ""))
+        for root in roots {
+            let full = expandTilde(in: root)
+            guard let items = try? fm.contentsOfDirectory(atPath: full) else { continue }
+            for item in items {
+                let path = full + "/" + item
+                guard let attrs = try? fm.attributesOfItem(atPath: path),
+                      let modDate = attrs[.modificationDate] as? Date,
+                      modDate > cutoff,
+                      validateDirectory(at: path) else { continue }
+                results.append(RecentFolder(name: item, path: path, shortcut: ""))
+            }
         }
-        results.sort { a, b in
-            let ma = (try? fm.attributesOfItem(atPath: a.path))?[.modificationDate] as? Date ?? .distantPast
-            let mb = (try? fm.attributesOfItem(atPath: b.path))?[.modificationDate] as? Date ?? .distantPast
+        results.sort {
+            let ma = (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date ?? .distantPast
+            let mb = (try? fm.attributesOfItem(atPath: $1.path))?[.modificationDate] as? Date ?? .distantPast
             return ma > mb
+        }
+        return results
+    }
+
+    /// Spotlight 搜索最近 7 天修改过的目录
+    private func recentFoldersFromSpotlight() -> [RecentFolder] {
+        let p = Process()
+        p.launchPath = "/usr/bin/mdfind"
+        p.arguments = ["-onlyin", NSHomeDirectory(),
+                       "kMDItemContentModificationDate >= $time.today(-7) && kMDItemContentType == public.folder"]
+        let pipe = Pipe(); p.standardOutput = pipe
+        try? p.run()
+        // 3 秒超时
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+            if p.isRunning { p.terminate() }
+        }
+        p.waitUntilExit()
+        guard let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) else { return [] }
+        var results: [RecentFolder] = []
+        for path in out.components(separatedBy: "\n") {
+            let trimmed = path.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, validateDirectory(at: trimmed) else { continue }
+            let name = URL(fileURLWithPath: trimmed).lastPathComponent
+            results.append(RecentFolder(name: name, path: trimmed, shortcut: ""))
         }
         return results
     }
