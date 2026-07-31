@@ -34,12 +34,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let action = n.userInfo?["action"] as? ActionType else { return }
             self?.executeAction(action)
         }
-        // 跳转面板关闭后，若设置窗口仍打开，则重新置前（避免面板的激活策略切换把设置窗口挤到后面）
-        NotificationCenter.default.addObserver(
-            forName: .quickJumpPanelClosed, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.refrontSettingsIfNeeded()
-        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkAccessibilityPermission()
         }
@@ -211,6 +205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         w.titlebarAppearsTransparent = true
         w.isReleasedWhenClosed = false
         w.minSize = NSSize(width: 360, height: 400)
+        w.level = .floating // 置顶显示：打开后始终浮在其他窗口之上，不会被跳转面板等挤到后面
         w.contentView = hv
         w.center()
         w.makeKeyAndOrderFront(nil)
@@ -219,14 +214,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { [weak self] _ in
             self?.settingsWindow = nil
         }
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    /// 跳转面板关闭后，若设置窗口仍打开，则将其重新置前
-    private func refrontSettingsIfNeeded() {
-        guard let w = settingsWindow, w.isVisible else { return }
-        w.makeKeyAndOrderFront(nil)
-        w.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 

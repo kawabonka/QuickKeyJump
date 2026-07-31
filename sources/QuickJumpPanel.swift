@@ -139,9 +139,6 @@ final class QuickJumpPanel: NSObject {
         // 清理回调
         onSelectCallback = nil
         onCancelCallback = nil
-
-        // 通知外部（如设置窗口）重新置前
-        NotificationCenter.default.post(name: .quickJumpPanelClosed, object: nil)
     }
 
     // MARK: - 窗口创建与配置
@@ -496,6 +493,4 @@ extension Notification.Name {
     /// Cmd+数字键 1-5 在访达中打开屏幕位置（userInfo index: 0-4）
     static let quickJumpOpenIndex = Notification.Name("quickJumpOpenIndex")
 
-    /// 跳转面板已关闭通知（用于设置窗口重新置前）
-    static let quickJumpPanelClosed = Notification.Name("quickJumpPanelClosed")
 }
