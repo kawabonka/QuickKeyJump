@@ -8,6 +8,7 @@ struct RecentFolder: Identifiable {
     let name: String       // 显示名称（目录名）
     let path: String       // 完整路径（已展开~）
     let shortcut: String   // 快捷键数字（1-5）
+    var modDate: Date = .distantPast  // 最近使用时间（用于全局倒序排列）
 }
 
 // MARK: - 错误定义
@@ -95,44 +96,66 @@ final class RecentFolderManager: ObservableObject {
         do {
             let plistData = try readFinderPlist()
             let arr = try extractRecentFoldersArray(from: plistData)
-            combined = try parseRecentFolders(from: arr, maxResults: maxResults)
+            combined = try parseRecentFolders(from: arr)
         } catch {
             print("\(logPrefix) Finder 最近文件夹加载失败: \(error.localizedDescription)")
         }
 
-        // 2. Downloads 目录
+        // 2. 常用根目录（Downloads 不再强制置顶，按实际修改时间参与排序）
         let downloadsPath = expandTilde(in: "~/Downloads")
-        if validateDirectory(at: downloadsPath),
-           !combined.contains(where: { $0.path == downloadsPath }) {
-            combined.insert(RecentFolder(name: "Downloads", path: downloadsPath, shortcut: ""), at: 0)
+        if validateDirectory(at: downloadsPath) {
+            appendUnique(&combined, RecentFolder(
+                name: "Downloads",
+                path: downloadsPath,
+                shortcut: "",
+                modDate: modificationDate(of: downloadsPath)
+            ))
         }
 
         // 3. Downloads / Desktop / Documents 最近活跃子目录
-        let dlSubs = recentSubfolders(in: ["~/Downloads", "~/Desktop", "~/Documents"])
-        for sub in dlSubs {
-            if !combined.contains(where: { $0.path == sub.path }) {
-                combined.append(sub)
-            }
+        for sub in recentSubfolders(in: ["~/Downloads", "~/Desktop", "~/Documents"]) {
+            appendUnique(&combined, sub)
         }
 
-        // 4. 先展示快速结果
+        // 4. 全局按最近使用时间倒序（最新在最上面）
+        combined.sort { $0.modDate > $1.modDate }
+
+        // 5. 先展示快速结果
         let fast = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
             RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
         }
         DispatchQueue.main.async { [weak self] in self?.folders = fast }
 
-        // 5. 异步 Spotlight 搜索最近 7 天修改过的目录（涵盖粘贴/下载/保存路径）
+        // 6. 异步 Spotlight 搜索最近 7 天修改过的目录（涵盖粘贴/下载/保存路径）
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let spotlight = self?.recentFoldersFromSpotlight() ?? []
+            guard let manager = self else { return }
+            let spotlight = manager.recentFoldersFromSpotlight()
             var merged = combined
             for f in spotlight {
-                if !merged.contains(where: { $0.path == f.path }) { merged.append(f) }
+                manager.appendUnique(&merged, f)
             }
+            merged.sort { $0.modDate > $1.modDate }
             let result = Array(merged.prefix(maxResults)).enumerated().map { (i, f) in
                 RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
             }
             DispatchQueue.main.async { self?.folders = result }
         }
+    }
+
+    /// 按路径去重追加（保留先出现的条目及其时间戳）
+    private func appendUnique(_ list: inout [RecentFolder], _ folder: RecentFolder) {
+        if !list.contains(where: { $0.path == folder.path }) {
+            list.append(folder)
+        }
+    }
+
+    /// 获取目录/文件的最后修改时间，失败返回 .distantPast
+    private func modificationDate(of path: String) -> Date {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let date = attrs[.modificationDate] as? Date else {
+            return .distantPast
+        }
+        return date
     }
 
     /// 扫描指定目录下最近 7 天修改过的子目录
@@ -149,7 +172,7 @@ final class RecentFolderManager: ObservableObject {
                       let modDate = attrs[.modificationDate] as? Date,
                       modDate > cutoff,
                       validateDirectory(at: path) else { continue }
-                results.append(RecentFolder(name: item, path: path, shortcut: ""))
+                results.append(RecentFolder(name: item, path: path, shortcut: "", modDate: modDate))
             }
         }
         results.sort {
@@ -179,7 +202,7 @@ final class RecentFolderManager: ObservableObject {
             let trimmed = path.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty, validateDirectory(at: trimmed) else { continue }
             let name = URL(fileURLWithPath: trimmed).lastPathComponent
-            results.append(RecentFolder(name: name, path: trimmed, shortcut: ""))
+            results.append(RecentFolder(name: name, path: trimmed, shortcut: "", modDate: modificationDate(of: trimmed)))
         }
         return results
     }
@@ -258,39 +281,39 @@ final class RecentFolderManager: ObservableObject {
     ///   - maxResults: 最多返回几条
     /// - Returns: 解析后的RecentFolder数组
     private func parseRecentFolders(
-        from array: [[String: Any]],
-        maxResults: Int
+        from array: [[String: Any]]
     ) throws -> [RecentFolder] {
         var results: [RecentFolder] = []
-        var shortcutIndex = 1
-        
+        // 收集上限：仅为排序提供足够样本，最终会截断到 maxResults
+        let maxCollect = 50
+
         for item in array {
-            // 最多取maxResults条
-            guard results.count < maxResults else { break }
-            
+            guard results.count < maxCollect else { break }
+
             // 尝试解析路径
             if let path = resolvePath(from: item) {
                 // 展开~为完整路径
                 let expandedPath = expandTilde(in: path)
-                
+
                 // 验证目录是否存在且确实是目录
                 if validateDirectory(at: expandedPath) {
                     let name = extractFolderName(from: expandedPath)
-                    let shortcut = String(shortcutIndex)
-                    
+                    // 优先使用 Finder 记录的访问时间，缺失时回退到文件修改时间
+                    let date = (item["date"] as? Date) ?? modificationDate(of: expandedPath)
+
                     let folder = RecentFolder(
                         name: name,
                         path: expandedPath,
-                        shortcut: shortcut
+                        shortcut: "",
+                        modDate: date
                     )
                     results.append(folder)
-                    shortcutIndex += 1
                 } else {
                     print("\(logPrefix) 目录不存在或不是有效目录: \(expandedPath)")
                 }
             }
         }
-        
+
         return results
     }
     
