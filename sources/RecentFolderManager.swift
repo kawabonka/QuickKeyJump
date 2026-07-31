@@ -80,6 +80,9 @@ final class RecentFolderManager: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
+        // 确保忽视清单先加载（首次启动会写入默认项 ~/Library）
+        _ = IgnoreListManager.shared
+
         // 初始化时自动加载
         loadRecentFolders()
 
