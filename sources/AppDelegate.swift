@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var hasShownPermissionAlert = false
     private var previousFrontmostApp: NSRunningApplication?
+    private var previousDialogTarget: DialogNavigator.Target?
     private var settingsWindow: NSWindow?
     private var prefsMenuItem: NSMenuItem?
     private var quitMenuItem: NSMenuItem?
@@ -21,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupStatusBarItem()
         registerAllShortcuts()
+        _ = DiagnosticLogger.shared
         InputSourceManager.shared.start()
         folderManager.loadRecentFolders(maxResults: 10)
         LaunchManager.syncWithPreference()
@@ -113,7 +115,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func executeQuickJump() {
         if quickJumpPanel.isVisible { quickJumpPanel.close(); return }
+        DiagnosticLogger.shared.beginAttempt()
+        DiagnosticLogger.shared.snapshot("before_panel")
         previousFrontmostApp = NSWorkspace.shared.frontmostApplication
+        previousDialogTarget = previousFrontmostApp.flatMap { DialogNavigator.captureTarget(host: $0) }
         folderManager.loadRecentFolders(maxResults: 10)
         quickJumpPanel.show(
             folderManager: folderManager,
@@ -123,42 +128,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleNavigation(to folder: RecentFolder) {
-        let prev = previousFrontmostApp; previousFrontmostApp = nil
-        guard let app = prev else { return }
-        app.activate(options: .activateAllWindows)
+        DiagnosticLogger.shared.log("FOLDER_SELECTED path=\(folder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))")
+        let app = previousFrontmostApp
+        let target = previousDialogTarget
+        previousFrontmostApp = nil
+        previousDialogTarget = nil
+        guard let app else { return }
         if app.bundleIdentifier == "com.apple.finder" {
-            FinderWindowNavigator.shared.navigateTo(folder.path); return
+            app.activate(options: [])
+            DiagnosticLogger.shared.log("ROUTE finder_direct")
+            FinderWindowNavigator.shared.navigateTo(folder.path)
+            return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.raiseDialogWindow(in: app)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                self?.navigateDialog(to: folder.path)
-            }
-        }
-    }
-
-    private func navigateDialog(to path: String) {
-        guard DialogNavigator.checkPermission() else {
-            DialogNavigator.requestPermission(); showPermissionAlert(for: .appleEvents); return
-        }
-        if !DialogNavigator.navigateTo(path: path) { print("[QKJ] nav fail: \(path)") }
-    }
-
-    private func raiseDialogWindow(in app: NSRunningApplication) {
-        let ae = AXUIElementCreateApplication(app.processIdentifier)
-        var wv: AnyObject?
-        guard AXUIElementCopyAttributeValue(ae, kAXWindowsAttribute as CFString, &wv) == .success,
-              let ws = wv as? [AXUIElement] else { return }
-        for w in ws {
-            var sv: AnyObject?
-            if AXUIElementCopyAttributeValue(w, "AXSheets" as CFString, &sv) == .success,
-               let s = sv as? [AXUIElement], !s.isEmpty { AXUIElementPerformAction(w, kAXRaiseAction as CFString); return }
-            var rv: AnyObject?
-            if AXUIElementCopyAttributeValue(w, kAXSubroleAttribute as CFString, &rv) == .success,
-               (rv as? String) == "AXDialog" { AXUIElementPerformAction(w, kAXRaiseAction as CFString); return }
-            var mv: AnyObject?
-            if AXUIElementCopyAttributeValue(w, kAXModalAttribute as CFString, &mv) == .success,
-               (mv as? Bool) == true { AXUIElementPerformAction(w, kAXRaiseAction as CFString); return }
+        DialogNavigator.navigate(to: folder.path, target: target) { error in
+            guard let error else { return }
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = L("文件夹跳转未完成", "Folder Navigation Incomplete")
+            alert.informativeText = error
+            alert.addButton(withTitle: L("好", "OK"))
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
         }
     }
 

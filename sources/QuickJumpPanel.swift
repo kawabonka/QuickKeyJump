@@ -127,6 +127,7 @@ final class QuickJumpPanel: NSObject {
 
     /// 关闭窗口
     func close() {
+        DiagnosticLogger.shared.log("PANEL_CLOSE isVisible=\(isVisible)")
         // 移除焦点监听
         removeFocusMonitoring()
 
@@ -360,6 +361,7 @@ final class QuickJumpPanel: NSObject {
         }
 
         // 激活应用（使窗口能够获取焦点）
+        DiagnosticLogger.shared.log("PANEL_ACTIVATE policy=\(app.activationPolicy().rawValue)")
         app.activate(ignoringOtherApps: true)
     }
 

@@ -85,3 +85,7 @@ MIT
 ### Default input source
 
 In Preferences, choose an enabled input source and turn on **Restore Default Input Source**. QuickKeyJump restores it after each app activation while allowing manual switching within the active app. This feature is off initially. If the saved input source is removed or disabled, choose another in Preferences.
+
+### Diagnostic logging (4.6.1)
+
+Enable **Diagnostic Logging** in Preferences, reproduce the file-picker navigation issue, then disable logging and use **Open Log Folder…** to find the new `.log` file. Logging is off by default and stored locally in `~/Library/Logs/QuickKeyJump/`. Logs include app/process/window identities, window titles, target folder paths, focus transitions and navigation results, but no text-field contents or ordinary keystrokes. This release adds diagnostics; file-picker compatibility is still under investigation.

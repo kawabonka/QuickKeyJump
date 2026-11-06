@@ -88,7 +88,9 @@ final class InputSourceManager: ObservableObject {
             guard let self, self.isEnabled,
                   NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
                   let source = self.sources.first(where: { $0.id == self.selectedID }) else { return }
-            self.selectionFailed = TISSelectInputSource(source.inputSource) != noErr
+            let status = TISSelectInputSource(source.inputSource)
+            DiagnosticLogger.shared.log("INPUT_SOURCE_SELECT pid=\(pid) id=\(source.id) result=\(status)")
+            self.selectionFailed = status != noErr
         }
         pendingApplication = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)

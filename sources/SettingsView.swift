@@ -11,6 +11,7 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
     @ViewState private var autoLaunch = LaunchManager.isEnabled
+    @ObservedObject private var diagnostics = DiagnosticLogger.shared
     @ObservedObject private var inputSources = InputSourceManager.shared
     @ObservedObject private var ignoreList = IgnoreListManager.shared
 
@@ -69,9 +70,28 @@ struct SettingsView: View {
                 inputSourceSettingsView
                 Divider().padding(.vertical, 6)
                 ignoreListView
+                Divider().padding(.vertical, 6)
+                diagnosticSettingsView
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private var diagnosticSettingsView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(L("开启诊断日志", "Enable Diagnostic Logging"), isOn: $diagnostics.isEnabled)
+                .font(.system(size: 13, weight: .semibold))
+                .toggleStyle(.switch).controlSize(.small)
+            Text(L("开启后复现一次跳转问题，再打开日志文件夹，将最新的 .log 文件发给我。日志仅保存在本机，包含应用、窗口标题、目标文件夹及焦点信息，不记录输入框内容。", "Enable, reproduce the navigation issue, then share the newest .log file. Logs stay on this Mac and include apps, window titles, target folders and focus details, but no text-field contents."))
+                .font(.system(size: 11)).foregroundColor(.secondary)
+            Button(L("打开日志文件夹…", "Open Log Folder…")) { diagnostics.openFolder() }
+                .font(.system(size: 12))
+            if let error = diagnostics.lastError {
+                Text(L("日志写入失败：", "Could not write log: ") + error)
+                    .font(.system(size: 11)).foregroundColor(.orange)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 8)
     }
 
     private var inputSourceSettingsView: some View {
