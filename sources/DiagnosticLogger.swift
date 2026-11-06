@@ -146,17 +146,24 @@ final class DiagnosticLogger: ObservableObject {
         var queue: [(AXUIElement, Int)] = [(root, 0)]
         var seen = Set<CFHashCode>()
         var index = 0
+        var truncated = false
         while index < queue.count && seen.count < 100 {
             let (node, depth) = queue[index]; index += 1
             guard seen.insert(CFHash(node)).inserted else { continue }
             log("TREE depth=\(depth) \(describe(node))")
-            guard depth < 5 else { continue }
+            guard depth < 5 else {
+                for key in ["AXSheets", kAXChildrenAttribute] {
+                    if let children = read(node, key) as? [AXUIElement], !children.isEmpty { truncated = true }
+                }
+                continue
+            }
             for key in ["AXSheets", kAXChildrenAttribute] {
                 if let children = read(node, key) as? [AXUIElement] {
+                    if children.count > 40 { truncated = true }
                     queue.append(contentsOf: children.prefix(40).map { ($0, depth + 1) })
                 }
             }
         }
-        log("TREE_END nodes=\(seen.count) truncated=\(index < queue.count)")
+        log("TREE_END nodes=\(seen.count) truncated=\(truncated || index < queue.count)")
     }
 }

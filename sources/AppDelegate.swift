@@ -116,14 +116,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func executeQuickJump() {
         if quickJumpPanel.isVisible { quickJumpPanel.close(); return }
         DiagnosticLogger.shared.beginAttempt()
-        DiagnosticLogger.shared.snapshot("before_panel")
         previousFrontmostApp = NSWorkspace.shared.frontmostApplication
         previousDialogTarget = previousFrontmostApp.flatMap { DialogNavigator.captureTarget(host: $0) }
         folderManager.loadRecentFolders(maxResults: 10)
         quickJumpPanel.show(
             folderManager: folderManager,
-            onSelect: { [weak self] f in self?.quickJumpPanel.close(); self?.handleNavigation(to: f) },
-            onCancel: { [weak self] in self?.quickJumpPanel.close() }
+            onSelect: { [weak self] f in self?.handleNavigation(to: f) },
+            onCancel: { [weak self] in
+                self?.previousFrontmostApp = nil
+                self?.previousDialogTarget = nil
+            }
         )
     }
 

@@ -7,7 +7,7 @@ final class DialogNavigator {
     struct Target {
         let host: NSRunningApplication
         let window: AXUIElement
-        let focusedControl: AXUIElement?
+        let picker: AXUIElement
     }
 
     private static var isNavigating = false
@@ -21,16 +21,27 @@ final class DialogNavigator {
     }
 
     static func captureTarget(host: NSRunningApplication) -> Target? {
-        logger.snapshot("capture_target", host: host, tree: true)
         guard checkPermission() else { logger.log("CAPTURE_FAILED accessibility_denied"); return nil }
-        let system = AXUIElementCreateSystemWide()
-        let focused = element(system, kAXFocusedUIElementAttribute)
-        let focusedApp = element(system, kAXFocusedApplicationAttribute)
-        // Prefer the focused control's window: a picker can be hosted by a helper process.
-        guard let window = focused.flatMap({ element($0, kAXWindowAttribute) })
-                ?? focusedApp.flatMap({ element($0, kAXFocusedWindowAttribute) }) else { return nil }
-        logger.log("TARGET_CAPTURED \(logger.describe(window))")
-        return Target(host: host, window: window, focusedControl: focused)
+        let app = AXUIElementCreateApplication(host.processIdentifier)
+        let windows = value(app, kAXWindowsAttribute) as? [AXUIElement] ?? []
+        let focusedWindow = element(app, kAXFocusedWindowAttribute)
+        let candidates = windows.compactMap { window -> (window: AXUIElement, picker: AXUIElement)? in
+            guard let picker = findPicker(in: window) else { return nil }
+            return (window, picker)
+        }
+        let choice = FilePickerResolver.choose(candidates: candidates, focusedWindow: focusedWindow,
+                                               same: { CFEqual($0, $1) })
+        logger.log("PICKER_CANDIDATES count=\(candidates.count)")
+        for candidate in candidates {
+            logger.log("PICKER_CANDIDATE window=\(logger.describe(candidate.window)) picker=\(logger.describe(candidate.picker))")
+        }
+        guard let choice else {
+            logger.log("CAPTURE_FAILED no_unique_file_picker")
+            logger.snapshot("capture_failed", host: host, tree: true)
+            return nil
+        }
+        logger.log("TARGET_CAPTURED window=\(logger.describe(choice.window)) picker=\(logger.describe(choice.picker))")
+        return Target(host: host, window: choice.window, picker: choice.picker)
     }
 
     static func navigate(to path: String, target: Target?, completion: @escaping (String?) -> Void) {
@@ -63,19 +74,21 @@ final class DialogNavigator {
         }
         let activated = target.host.activate(options: [])
         logger.log("ACTIVATE_HOST result=\(activated)")
-        // Raise the saved window, rather than an arbitrary window of the host app.
         let raised = AXUIElementPerformAction(target.window, kAXRaiseAction as CFString)
         logger.log("AX_RAISE result=\(raised.rawValue)")
         let mainStatus = AXUIElementSetAttributeValue(target.window, kAXMainAttribute as CFString, kCFBooleanTrue)
         logger.log("AX_SET main result=\(mainStatus.rawValue)")
-        let windowFocusStatus = AXUIElementSetAttributeValue(target.window, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        logger.log("AX_SET windowFocus result=\(windowFocusStatus.rawValue)")
-        if let control = target.focusedControl {
-            let controlFocusStatus = AXUIElementSetAttributeValue(control, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-            logger.log("AX_SET controlFocus result=\(controlFocusStatus.rawValue)")
-        }
-
-        waitUntil(timeout: 1.5, condition: { isTargetFocused(target) }) { ready in
+        // Reacquire the picker and its controls; web controls saved before activation
+        // can already be invalid (the 4.6.1 log returned AXError -25202).
+        var lastFocusAttempt = Date.distantPast
+        waitUntil(timeout: 1.5, condition: {
+            if isTargetFocused(target) { return true }
+            if Date().timeIntervalSince(lastFocusAttempt) >= 0.25 {
+                lastFocusAttempt = Date()
+                restorePickerFocus(target)
+            }
+            return isTargetFocused(target)
+        }) { ready in
             logger.log("FOCUS_READY ready=\(ready)")
             logger.snapshot("focus_wait_end", targetWindow: target.window, host: target.host)
             guard ready else {
@@ -83,7 +96,10 @@ final class DialogNavigator {
                 return
             }
             // Existing search/name fields must never be mistaken for Go to Folder.
-            let existingFields = descendants(target.window).filter { isTextField($0) }
+            guard let picker = findPicker(in: target.window) else {
+                finish(L("文件选择框已关闭或不可访问，请重新打开后重试。", "The file picker closed or is inaccessible. Reopen it and try again.")); return
+            }
+            let existingFields = descendants(picker).filter { isTextField($0) }
             logger.log("BASELINE_FIELDS count=\(existingFields.count)")
             for field in existingFields { logger.log("BASELINE_FIELD \(logger.describe(field))") }
             if let error = sendKeys("key code 5 using {command down, shift down}") {
@@ -126,7 +142,7 @@ final class DialogNavigator {
                     if let error = sendKeys("key code 36") { finish(error); return }
                     waitUntil(timeout: 2, condition: {
                         // Disappearance confirms the path was accepted, not merely that keys were sent.
-                        let nodes = descendants(target.window)
+                        let nodes = findPicker(in: target.window).map { descendants($0) } ?? []
                         return isTargetFocused(target) && nodes.count > 1
                             && !nodes.contains(where: { CFEqual($0, field) })
                     }) { accepted in
@@ -158,19 +174,64 @@ final class DialogNavigator {
     }
 
     private static func isTargetFocused(_ target: Target) -> Bool {
-        guard let focused = focusedElement() else { return false }
-        // Sheets can be represented either as children or as focused windows.
-        var current: AXUIElement? = focused
-        for _ in 0..<30 {
-            guard let node = current else { break }
-            if CFEqual(node, target.window) { return true }
-            current = element(node, kAXParentAttribute)
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target.host.processIdentifier,
+              let picker = findPicker(in: target.window), let focused = focusedElement() else { return false }
+        // The host window alone is insufficient: the focus must be inside its picker.
+        return FilePickerResolver.contains(focused, root: picker,
+                                           parent: { element($0, kAXParentAttribute) },
+                                           same: { CFEqual($0, $1) })
+            || descendants(picker).contains(where: { CFEqual($0, focused) })
+    }
+
+    private static func restorePickerFocus(_ target: Target) {
+        guard let picker = findPicker(in: target.window) else {
+            logger.log("RESTORE_PICKER missing_or_invalid"); return
         }
-        if let window = element(focused, kAXWindowAttribute), CFEqual(window, target.window) { return true }
-        let system = AXUIElementCreateSystemWide()
-        guard let app = element(system, kAXFocusedApplicationAttribute),
-              let window = element(app, kAXFocusedWindowAttribute) else { return false }
-        return CFEqual(window, target.window)
+        let windowRaised = AXUIElementPerformAction(target.window, kAXRaiseAction as CFString)
+        logger.log("RESTORE_PICKER_WINDOW result=\(windowRaised.rawValue)")
+        let raised = AXUIElementPerformAction(picker, kAXRaiseAction as CFString)
+        logger.log("RAISE_PICKER result=\(raised.rawValue)")
+        let nodes = descendants(picker)
+        // Focus a fresh file-list control, never the stale web text area or Open button.
+        let controls = nodes.filter { string($0, kAXRoleAttribute) == kAXBrowserRole }
+            + nodes.filter { string($0, kAXRoleAttribute) == kAXOutlineRole }
+            + nodes.filter { string($0, kAXSubroleAttribute) == kAXSearchFieldSubrole }
+        for control in controls {
+            let status = AXUIElementSetAttributeValue(control, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            logger.log("RESTORE_PICKER result=\(status.rawValue) control=\(logger.describe(control))")
+            if isTargetFocused(target) { return }
+        }
+        logger.log("RESTORE_PICKER no_control_restored_focus")
+    }
+
+    private static func findPicker(in window: AXUIElement) -> AXUIElement? {
+        var queue: [(AXUIElement, Int)] = [(window, 0)]
+        var visited: [AXUIElement] = []
+        var index = 0
+        while index < queue.count && visited.count < 160 {
+            let (node, depth) = queue[index]; index += 1
+            guard !visited.contains(where: { CFEqual($0, node) }) else { continue }
+            visited.append(node)
+            let identifier = string(node, "AXIdentifier")
+            if identifier == "open-panel" || identifier == "save-panel" { return node }
+            // Some native panels omit their panel identifier. Require file-picker
+            // controls instead of treating every modal dialog as a file picker.
+            let role = string(node, kAXRoleAttribute)
+            if role == kAXSheetRole || role == kAXWindowRole {
+                let controls = children(node).flatMap { [$0] + children($0) }
+                let identifiers = Set(controls.compactMap { string($0, "AXIdentifier") })
+                if identifiers.contains("where popup") && identifiers.contains("OKButton")
+                    && identifiers.contains("CancelButton") { return node }
+            }
+            if depth < 6 { queue.append(contentsOf: children(node).map { ($0, depth + 1) }) }
+        }
+        return nil
+    }
+
+    private static func children(_ node: AXUIElement) -> [AXUIElement] {
+        // Sheets first: a file list can contain thousands of unrelated children.
+        (value(node, "AXSheets") as? [AXUIElement] ?? [])
+            + (value(node, kAXChildrenAttribute) as? [AXUIElement] ?? [])
     }
 
     private static func focusedElement() -> AXUIElement? {
