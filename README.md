@@ -89,3 +89,7 @@ In Preferences, choose an enabled input source and turn on **Restore Default Inp
 ### Diagnostic logging (4.6.1)
 
 Enable **Diagnostic Logging** in Preferences, reproduce the file-picker navigation issue, then disable logging and use **Open Log Folder…** to find the new `.log` file. Logging is off by default and stored locally in `~/Library/Logs/QuickKeyJump/`. Logs include app/process/window identities, window titles, target folder paths, focus transitions and navigation results, but no text-field contents or ordinary keystrokes. This release adds diagnostics; file-picker compatibility is still under investigation.
+
+### Open Finder folders (4.6.3)
+
+Quick Jump samples the folders currently displayed in open Finder windows in the background, merges them with recent history and Spotlight, and keeps the freshest observation per path. Open folders can appear even if their contents have not changed. Ignore rules and the 10-item limit still apply. Allow Finder automation access if macOS asks.

@@ -1,17 +1,6 @@
 import Foundation
 import Combine
 
-// MARK: - 数据模型
-
-/// 表示一个最近使用的文件夹条目
-struct RecentFolder: Identifiable {
-    let id = UUID()
-    let name: String       // 显示名称（目录名）
-    let path: String       // 完整路径（已展开~）
-    let shortcut: String   // 快捷键数字（1-5）
-    var modDate: Date = .distantPast  // 最近使用时间（用于全局倒序排列）
-}
-
 // MARK: - 错误定义
 
 /// RecentFolderManager 可能遇到的错误类型
@@ -45,8 +34,8 @@ enum RecentFolderError: Error, LocalizedError {
 
 /// 管理最近使用的文件夹列表
 ///
-/// 从 macOS Finder 的偏好设置中读取 `FXRecentFolders` 键值，
-/// 解析其中的书签数据和URL字符串，生成可供UI展示的最近文件夹列表。
+/// 合并 Finder 最近记录、当前 Finder 窗口、活跃子目录与 Spotlight，
+/// 按最近观测或修改时间生成可跳转的目录列表。
 ///
 /// 使用示例：
 /// ```swift
@@ -78,6 +67,8 @@ final class RecentFolderManager: ObservableObject {
     // MARK: 初始化
     
     private var cancellables: Set<AnyCancellable> = []
+    private var samplingGeneration = 0
+    private let finderSamplingQueue = DispatchQueue(label: "com.quickkeyjump.finder-sampling", qos: .userInitiated)
 
     init() {
         // 确保忽视清单先加载（首次启动会写入默认项 ~/Library）
@@ -103,6 +94,9 @@ final class RecentFolderManager: ObservableObject {
     ///
     /// - Parameter maxResults: 最多返回几条记录，默认为10（视口显示5条，可上下滚动）
     func loadRecentFolders(maxResults: Int = 10) {
+        samplingGeneration += 1
+        let generation = samplingGeneration
+        let sampledAt = Date()
         var combined: [RecentFolder] = []
 
         // 1. Finder 最近文件夹 (FXRecentFolders)
@@ -130,38 +124,30 @@ final class RecentFolderManager: ObservableObject {
             appendUnique(&combined, sub)
         }
 
-        // 4. 全局按最近使用时间倒序（最新在最上面）
-        combined.sort { $0.modDate > $1.modDate }
-
-        // 4.1 过滤忽视清单（清单内目录及其子目录不纳入候选）
-        combined = combined.filter { !IgnoreListManager.shared.isIgnored($0.path) }
-
-        // 5. 先展示快速结果
-        let fast = Array(combined.prefix(maxResults)).enumerated().map { (i, f) in
-            RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
+        // Publish the inexpensive sources immediately. Independent background sources
+        // merge on the main queue, and an older refresh can never overwrite a newer one.
+        folders = RecentFolderSampling.merge(combined, ignoring: IgnoreListManager.shared.paths, limit: maxResults)
+        let publish: ([RecentFolder]) -> Void = { [weak self] additions in
+            guard let self, self.samplingGeneration == generation else { return }
+            combined.append(contentsOf: additions)
+            self.folders = RecentFolderSampling.merge(combined, ignoring: IgnoreListManager.shared.paths, limit: maxResults)
         }
-        DispatchQueue.main.async { [weak self] in self?.folders = fast }
-
-        // 6. 异步 Spotlight 搜索最近 7 天修改过的目录（涵盖粘贴/下载/保存路径）
+        finderSamplingQueue.async {
+            let openFolders = FinderWindowFolderSampler.sample(at: sampledAt)
+            DispatchQueue.main.async { publish(openFolders) }
+        }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let manager = self else { return }
-            let spotlight = manager.recentFoldersFromSpotlight()
-            var merged = combined
-            for f in spotlight {
-                manager.appendUnique(&merged, f)
-            }
-            merged.sort { $0.modDate > $1.modDate }
-            merged = merged.filter { !IgnoreListManager.shared.isIgnored($0.path) }
-            let result = Array(merged.prefix(maxResults)).enumerated().map { (i, f) in
-                RecentFolder(name: f.name, path: f.path, shortcut: String(i + 1))
-            }
-            DispatchQueue.main.async { self?.folders = result }
+            guard let self else { return }
+            let spotlight = self.recentFoldersFromSpotlight()
+            DispatchQueue.main.async { publish(spotlight) }
         }
     }
 
-    /// 按路径去重追加（保留先出现的条目及其时间戳）
+    /// Keep the freshest observation when multiple sources describe the same path.
     private func appendUnique(_ list: inout [RecentFolder], _ folder: RecentFolder) {
-        if !list.contains(where: { $0.path == folder.path }) {
+        if let index = list.firstIndex(where: { $0.path == folder.path }) {
+            if folder.modDate > list[index].modDate { list[index] = folder }
+        } else {
             list.append(folder)
         }
     }
@@ -192,11 +178,7 @@ final class RecentFolderManager: ObservableObject {
                 results.append(RecentFolder(name: item, path: path, shortcut: "", modDate: modDate))
             }
         }
-        results.sort {
-            let ma = (try? fm.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date ?? .distantPast
-            let mb = (try? fm.attributesOfItem(atPath: $1.path))?[.modificationDate] as? Date ?? .distantPast
-            return ma > mb
-        }
+        results.sort { $0.modDate > $1.modDate }
         return results
     }
 
@@ -207,13 +189,14 @@ final class RecentFolderManager: ObservableObject {
         p.arguments = ["-onlyin", NSHomeDirectory(),
                        "kMDItemContentModificationDate >= $time.today(-7) && kMDItemContentType == public.folder"]
         let pipe = Pipe(); p.standardOutput = pipe
-        try? p.run()
+        do { try p.run() } catch { return [] }
         // 3 秒超时
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
             if p.isRunning { p.terminate() }
         }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        guard let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) else { return [] }
+        guard let out = String(data: data, encoding: .utf8) else { return [] }
         var results: [RecentFolder] = []
         for path in out.components(separatedBy: "\n") {
             let trimmed = path.trimmingCharacters(in: .whitespaces)

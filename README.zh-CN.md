@@ -38,6 +38,8 @@ Windows 上，[Listary](https://www.listary.com/) 是一个神器。在任何地
 
 > 所有快捷键可在 **偏好设置**（`⌘,`）中自定义
 
+当前打开的 Finder 窗口所展示的目录也会在唤醒时加入候选，即使目录内容没有修改；按本次采样时间合并、去重，并遵循忽视清单。
+
 ## 安装
 
 从 [最新 Release](https://github.com/kawabonka/QuickKeyJump/releases) 下载 `QuickKeyJump.dmg`，挂载后拖入 `Applications`。

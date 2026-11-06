@@ -24,7 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerAllShortcuts()
         _ = DiagnosticLogger.shared
         InputSourceManager.shared.start()
-        folderManager.loadRecentFolders(maxResults: 10)
         LaunchManager.syncWithPreference()
         NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
@@ -118,7 +117,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DiagnosticLogger.shared.beginAttempt()
         previousFrontmostApp = NSWorkspace.shared.frontmostApplication
         previousDialogTarget = previousFrontmostApp.flatMap { DialogNavigator.captureTarget(host: $0) }
-        folderManager.loadRecentFolders(maxResults: 10)
         quickJumpPanel.show(
             folderManager: folderManager,
             onSelect: { [weak self] f in self?.handleNavigation(to: f) },
