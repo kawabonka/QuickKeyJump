@@ -1,5 +1,8 @@
 import SwiftUI
 
+// Keep the property wrapper unambiguous on SDKs that also expose a State macro.
+typealias ViewState<Value> = SwiftUI.State<Value>
+
 typealias RecorderCocoa = KeyboardShortcuts.RecorderCocoa
 
 struct SettingsView: View {
@@ -7,7 +10,8 @@ struct SettingsView: View {
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
-    @State private var autoLaunch = LaunchManager.isEnabled
+    @ViewState private var autoLaunch = LaunchManager.isEnabled
+    @ObservedObject private var inputSources = InputSourceManager.shared
     @ObservedObject private var ignoreList = IgnoreListManager.shared
 
     var body: some View {
@@ -62,10 +66,47 @@ struct SettingsView: View {
                     }
                 }
                 Divider().padding(.vertical, 6)
+                inputSourceSettingsView
+                Divider().padding(.vertical, 6)
                 ignoreListView
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private var inputSourceSettingsView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(L("自动恢复默认输入法", "Restore Default Input Source"), isOn: $inputSources.isEnabled)
+                .font(.system(size: 13, weight: .semibold))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            Text(L("每次切换 App 时恢复默认输入法；当前 App 内仍可手动切换。", "Restore on app activation. Manual switching within the active app remains available."))
+                .font(.system(size: 11)).foregroundColor(.secondary)
+            Picker(L("默认输入法", "Default Input Source"), selection: $inputSources.selectedID) {
+                Text(L("请选择输入法", "Choose an input source")).tag("")
+                ForEach(inputSources.sources) { source in
+                    Text(source.name).tag(source.id)
+                }
+                if inputSources.selectedSourceUnavailable {
+                    Text(L("已保存的输入法不可用", "Saved input source unavailable"))
+                        .tag(inputSources.selectedID)
+                }
+            }
+            .font(.system(size: 12))
+            if inputSources.selectedSourceUnavailable {
+                Text(L("该输入法已被禁用或移除，请重新选择。", "This input source is disabled or removed. Please choose another."))
+                    .font(.system(size: 11)).foregroundColor(.orange)
+            } else if inputSources.isEnabled && inputSources.selectedID.isEmpty {
+                Text(L("选择输入法后开始生效。", "Choose an input source to activate this feature."))
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+            }
+            if inputSources.selectionFailed {
+                Text(L("系统未能切换输入法，请检查该输入法是否可用。", "The system could not switch input sources. Check that the source is available."))
+                    .font(.system(size: 11)).foregroundColor(.orange)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 8)
+        .onAppear { inputSources.refreshSources() }
     }
 
     /// 忽视清单栏目：清单内的目录及其子目录不出现在快速跳转候选里

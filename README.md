@@ -81,3 +81,7 @@ open Build/QuickKeyJump.app
 ## License
 
 MIT
+
+### Default input source
+
+In Preferences, choose an enabled input source and turn on **Restore Default Input Source**. QuickKeyJump restores it after each app activation while allowing manual switching within the active app. This feature is off initially. If the saved input source is removed or disabled, choose another in Preferences.

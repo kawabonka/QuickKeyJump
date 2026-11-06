@@ -23,10 +23,10 @@ struct QuickJumpView: View {
     // MARK: - 状态
 
     /// 当前选中项的索引（0-9）
-    @State private var selectedIndex: Int = 0
+    @ViewState private var selectedIndex: Int = 0
 
     /// 视口内首行索引（用于上下选择滚动）
-    @State private var scrollOffset: Int = 0
+    @ViewState private var scrollOffset: Int = 0
 
     // MARK: - 常量
 

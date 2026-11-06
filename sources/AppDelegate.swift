@@ -21,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupStatusBarItem()
         registerAllShortcuts()
+        InputSourceManager.shared.start()
         folderManager.loadRecentFolders(maxResults: 10)
         LaunchManager.syncWithPreference()
         NotificationCenter.default.addObserver(
