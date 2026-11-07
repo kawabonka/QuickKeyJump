@@ -15,11 +15,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var preventSleepItem: NSMenuItem?
     private var caffeinateProcess: Process?
     private var cleanMemoryItem: NSMenuItem?
+    private var textConverterItem: NSMenuItem?
+    private let textConverter = TextConverterWindow()
 
     // MARK: 生命周期
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        ApplicationMenu.install()
         setupStatusBarItem()
         registerAllShortcuts()
         _ = DiagnosticLogger.shared
@@ -84,6 +87,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cleanItem.target = self
         menu.addItem(cleanItem)
         cleanMemoryItem = cleanItem
+
+        let converterItem = NSMenuItem(title: L("文本转换粘贴…", "Clipboard Converter…"), action: #selector(openTextConverter), keyEquivalent: "")
+        converterItem.target = self
+        menu.addItem(converterItem)
+        textConverterItem = converterItem
 
         menu.addItem(NSMenuItem.separator())
 
@@ -215,6 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         prefsMenuItem?.title = L("偏好设置...", "Preferences...")
         preventSleepItem?.title = L("防止锁屏", "Prevent Sleep")
         cleanMemoryItem?.title = L("清理内存", "Clean Memory")
+        textConverterItem?.title = L("文本转换粘贴…", "Clipboard Converter…")
         quitMenuItem?.title = L("退出 QuickKeyJump", "Quit QuickKeyJump")
     }
 
@@ -232,6 +241,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             sender.state = .on
         }
     }
+
+    @objc private func openTextConverter() { textConverter.show() }
 
     @objc private func cleanMemory() {
         // Step 1: 采集清理前数据

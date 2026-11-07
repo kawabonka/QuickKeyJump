@@ -14,7 +14,8 @@ FRAMEWORKS := \
 	-framework Carbon \
 	-framework ApplicationServices \
 	-framework SwiftUI \
-	-framework Combine
+	-framework Combine \
+	-framework WebKit
 
 SWIFTC := xcrun swiftc
 OPTIMIZE := -O
@@ -46,6 +47,7 @@ build: clean $(BUILD_DIR)
 	@chmod +x $(MACOS_DIR)/$(APP_NAME)
 	@cp Info.plist $(CONTENTS_DIR)/
 	@cp AppIcon.icns $(RESOURCES_DIR)/
+	@cp -R TextConverter $(RESOURCES_DIR)/
 	@echo "APPL????" > $(CONTENTS_DIR)/PkgInfo
 	@echo "=== 构建完成: $(APP_BUNDLE) ==="
 

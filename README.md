@@ -93,3 +93,7 @@ Enable **Diagnostic Logging** in Preferences, reproduce the file-picker navigati
 ### Open Finder folders (4.6.3)
 
 Quick Jump samples the folders currently displayed in open Finder windows in the background, merges them with recent history and Spotlight, and keeps the freshest observation per path. Open folders can appear even if their contents have not changed. Ignore rules and the 10-item limit still apply. Allow Finder automation access if macOS asks.
+
+## Clipboard Converter
+
+Choose **Clipboard Converter…** below **Clean Memory** in the menu bar. Paste or type Markdown, HTML, Slack, or plain text on the left, choose an output format on the right, and copy the result to another application with `⌘V`. Rich text copying includes both HTML and plain text. All conversion runs offline without saving input. Slack supports common emphasis, strikethrough, and links; mathematical typesetting is not included.

@@ -40,6 +40,15 @@ Windows 上，[Listary](https://www.listary.com/) 是一个神器。在任何地
 
 当前打开的 Finder 窗口所展示的目录也会在唤醒时加入候选，即使目录内容没有修改；按本次采样时间合并、去重，并遵循忽视清单。
 
+## 文本转换粘贴
+
+菜单栏点击 **文本转换粘贴…**（位于“清理内存”下方），打开左右双栏转换窗口。
+
+- 左侧粘贴或输入内容，支持自动识别，也可手动指定 Markdown、HTML、Slack、纯文本。
+- 右侧选择目标格式，实时查看富文本预览或源码，点击“复制转换结果”后在目标应用按 `⌘V`。
+- 富文本复制同时提供 HTML 与纯文本；转换全部在本机完成，无需联网，不保存输入内容。
+- Slack 支持常见加粗、删除线和链接转换；不含公式及 LaTeX/Typst 转换。
+
 ## 安装
 
 从 [最新 Release](https://github.com/kawabonka/QuickKeyJump/releases) 下载 `QuickKeyJump.dmg`，挂载后拖入 `Applications`。
