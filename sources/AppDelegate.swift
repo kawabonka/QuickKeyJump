@@ -148,6 +148,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             FinderWindowNavigator.shared.navigateTo(folder.path)
             return
         }
+        // Ordinary document editors have no file picker to navigate. Open the
+        // folder through Finder without sending navigation keystrokes to text.
+        guard let target else {
+            DiagnosticLogger.shared.log("ROUTE finder_open_no_picker")
+            let url = URL(fileURLWithPath: folder.path, isDirectory: true)
+            if !NSWorkspace.shared.open(url) {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = L("无法打开文件夹", "Could Not Open Folder")
+                alert.informativeText = L("目标文件夹不存在或无法访问。", "The folder does not exist or is inaccessible.")
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
+            return
+        }
         DialogNavigator.navigate(to: folder.path, target: target) { error in
             guard let error else { return }
             let alert = NSAlert()
